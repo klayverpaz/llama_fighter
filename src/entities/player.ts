@@ -47,8 +47,13 @@ export function pickTarget(position: THREE.Vector3, targets: TargetInfo[]): Targ
   return best;
 }
 
-export function blockedByTarget(next: THREE.Vector3, targets: TargetInfo[]): boolean {
-  return targets.some((t) => t.standing && groundDistance(next, t.position) < PLAYER_TUNING.blockDistance);
+/** Blocks a step that ends too close to a standing target AND moves closer to it; retreating is always allowed. */
+export function blockedByTarget(current: THREE.Vector3, next: THREE.Vector3, targets: TargetInfo[]): boolean {
+  return targets.some((t) => {
+    if (!t.standing) return false;
+    const after = groundDistance(next, t.position);
+    return after < PLAYER_TUNING.blockDistance && after < groundDistance(current, t.position);
+  });
 }
 
 export class Player {
@@ -80,7 +85,7 @@ export class Player {
     if (canAttack(this.attack) && input.move.lengthSq() > 0) {
       speed = input.run ? PLAYER_TUNING.runSpeed : PLAYER_TUNING.walkSpeed;
       const next = this.position.clone().addScaledVector(input.move, speed * dt);
-      if (blockedByTarget(next, targets)) speed = 0;
+      if (blockedByTarget(this.position, next, targets)) speed = 0;
       else this.position.copy(next);
       const targetYaw = Math.atan2(input.move.x, input.move.z);
       this.yaw = lerpAngle(this.yaw, targetYaw, 1 - Math.exp(-PLAYER_TUNING.turnRate * dt));

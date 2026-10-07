@@ -16,10 +16,19 @@ describe('pickTarget', () => {
 });
 
 describe('blockedByTarget', () => {
-  it('blocks a step that ends inside a standing target', () => {
-    const next = new Vector3(0, 0.96, 0.8);
-    expect(blockedByTarget(next, [at(0, 1.0)])).toBe(true);
-    expect(blockedByTarget(next, [at(0, 1.0, false)])).toBe(false);
-    expect(blockedByTarget(next, [at(0, 2.0)])).toBe(false);
+  const p = (z: number) => new Vector3(0, 0.96, z);
+
+  it('blocks a step that ends inside a standing target and moves closer', () => {
+    expect(blockedByTarget(p(0.8), p(0.9), [at(0, 1.0)])).toBe(true);
+  });
+
+  it('never blocks retreating, even while still inside the block distance', () => {
+    expect(blockedByTarget(p(0.6), p(0.5), [at(0, 1.0)])).toBe(false);
+    expect(blockedByTarget(p(0.6), p(0.55), [at(0, 1.0)])).toBe(false);
+  });
+
+  it('ignores downed and distant targets', () => {
+    expect(blockedByTarget(p(0.8), p(0.9), [at(0, 1.0, false)])).toBe(false);
+    expect(blockedByTarget(p(0.8), p(0.9), [at(0, 2.0)])).toBe(false);
   });
 });
