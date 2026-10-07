@@ -60,9 +60,11 @@ async function main() {
 
     if (game && mouse.locked) {
       const g = game;
+      let restart = false;
       stepper.advance(elapsed, () => {
+        if (restart) return;
         const pressed = keyboard.drainPressed();
-        if (pressed.includes('KeyR')) { startGame(npcCount); return; }
+        if (pressed.includes('KeyR')) { restart = true; return; }
         const strikes = pressed.map((c) => KEY_TO_STRIKE[c]).filter((s): s is StrikeName => !!s);
         const move = moveDirection({
           forward: keyboard.isDown('KeyW'), back: keyboard.isDown('KeyS'),
@@ -71,6 +73,7 @@ async function main() {
         const run = keyboard.isDown('ShiftLeft') || keyboard.isDown('ShiftRight');
         g.step(stepper.dt, { move, run, strikes, cameraYaw: orbit.yaw });
       });
+      if (restart) startGame(npcCount);
       overlay.setKnockouts(game.knockouts);
     } else {
       keyboard.clear();

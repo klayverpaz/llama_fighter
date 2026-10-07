@@ -29,7 +29,12 @@ export class MouseLook {
   }
 
   requestLock(): void {
-    if (!this.locked) void this.element.requestPointerLock();
+    if (this.locked) return;
+    // requestPointerLock may return undefined (older browsers) or reject (denied, Esc too fast).
+    Promise.resolve(this.element.requestPointerLock()).catch(() => {
+      this.locked = false;
+      this.onLockChange?.(false);
+    });
   }
 
   /** Accumulated movement since the last call. */
