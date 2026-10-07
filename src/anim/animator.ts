@@ -13,6 +13,14 @@ function overlay(target: JointRots, layer: PartialJointRots): void {
   }
 }
 
+/** Compose delta rotations onto the target (target = target * delta). */
+function compose(target: JointRots, delta: PartialJointRots): void {
+  for (const j of JOINT_NAMES) {
+    const q = delta[j];
+    if (q) target[j].multiply(q);
+  }
+}
+
 export class Animator {
   private baseTime = 0;
   private action: Action | null = null;
@@ -47,7 +55,7 @@ export class Animator {
     const wantIntensity = this.action ? 0 : Math.min(1, moveSpeed / 3);
     this.walkIntensity += (wantIntensity - this.walkIntensity) * Math.min(1, dt * 10);
     this.walkPhase += dt * walkPhaseRate(moveSpeed);
-    overlay(target, walkLayer(this.walkPhase, this.walkIntensity));
+    compose(target, walkLayer(this.walkPhase, this.walkIntensity));
 
     if (this.action) {
       this.action.time += dt;

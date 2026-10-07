@@ -57,4 +57,20 @@ describe('Animator', () => {
     const walking = a.update(0.05, 3).hipL;
     expect(walking.angleTo(standing)).toBeGreaterThan(0.05);
   });
+  it('does not pop the legs on the first walking frame', () => {
+    const a = new Animator(STANCE);
+    a.update(0);
+    const r = a.update(1 / 60, 3);
+    expect(r.hipL.angleTo(eulerToQuat(GUARD.hipL!))).toBeLessThan(0.1);
+  });
+
+  it('returns the legs to the stance pose after walking stops', () => {
+    const a = new Animator(STANCE);
+    a.update(0);
+    for (let i = 0; i < 20; i++) a.update(0.05, 3);
+    let r = a.update(0, 0);
+    for (let i = 0; i < 40; i++) r = a.update(0.05, 0);
+    expect(r.hipL.angleTo(eulerToQuat(GUARD.hipL!))).toBeLessThan(0.02);
+    expect(r.kneeL.angleTo(eulerToQuat(GUARD.kneeL!))).toBeLessThan(0.02);
+  });
 });

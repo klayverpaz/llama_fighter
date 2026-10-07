@@ -4,15 +4,16 @@ const HIP_SWING = 0.5;
 const KNEE_BEND = 0.8;
 
 /**
- * Procedural leg cycle layered over the stance. `phase` in radians, `intensity` 0..1.
+ * Procedural leg cycle, returned as delta rotations to compose onto the stance.
+ * `phase` in radians, `intensity` 0..1.
  * Positive hip X rotation swings the leg backward; the knee bends while the leg is back.
  */
 export function walkLayer(phase: number, intensity: number): PartialJointRots {
   if (intensity <= 0) return {};
   const s = Math.sin(phase) * intensity;
   return {
-    hipL: eulerToQuat([HIP_SWING * s, 0, 0.08]),
-    hipR: eulerToQuat([-HIP_SWING * s, 0, -0.08]),
+    hipL: eulerToQuat([HIP_SWING * s, 0, 0]),
+    hipR: eulerToQuat([-HIP_SWING * s, 0, 0]),
     kneeL: eulerToQuat([KNEE_BEND * Math.max(0, s), 0, 0]),
     kneeR: eulerToQuat([KNEE_BEND * Math.max(0, -s), 0, 0]),
   };
