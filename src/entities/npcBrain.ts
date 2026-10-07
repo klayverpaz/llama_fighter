@@ -5,7 +5,7 @@ export type NpcMoveState = 'chase' | 'hold';
 export const NPC_TUNING = {
   speed: 2.5,
   holdDistance: 1.0,
-  resumeDistance: 1.2,
+  resumeDistance: 1.1,
   separationRadius: 0.9,
   separationStrength: 2.0,
   ragdollMinSeconds: 4,

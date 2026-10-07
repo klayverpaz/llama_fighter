@@ -81,9 +81,10 @@ export class Npc {
       }
       case 'flinch': {
         if (this.pushback) {
-          this.position.addScaledVector(this.pushback.velocity, dt);
-          this.pushback.remaining -= dt;
-          if (this.pushback.remaining <= 0) this.pushback = null;
+          const step = Math.min(dt, this.pushback.remaining);
+          this.position.addScaledVector(this.pushback.velocity, step);
+          this.pushback.remaining -= step;
+          if (this.pushback.remaining <= 1e-9) this.pushback = null;
         }
         if (this.timer >= NPC_TUNING.flinchSeconds) { this.state = 'hold'; this.moveState = 'hold'; }
         break;

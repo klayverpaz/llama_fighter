@@ -37,6 +37,8 @@ describe('Game', () => {
     run(1.0);
     expect(npc.hp).toBe(NPC_MAX_HP - STRIKES.frontKick.damage);
     expect(npc.standing).toBe(true);
+    expect(npc.state).toBe('hold');
+    expect(Math.hypot(npc.position.x - game.player.position.x, npc.position.z - game.player.position.z)).toBeLessThanOrEqual(1.05);
 
     game.step(DT, { ...idle, strikes: ['frontKick'] });
     run(1.0);
