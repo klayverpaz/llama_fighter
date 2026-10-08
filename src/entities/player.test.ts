@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { Vector3 } from 'three';
-import { pickTarget, blockedByTarget, PLAYER_TUNING } from './player';
+import { pickTarget, blockedByTarget, turnTowardAim, PLAYER_TUNING } from './player';
+import { STRIKES } from '../combat/strikes';
+import { wrapAngle } from '../core/math';
 
 const at = (x: number, z: number, standing = true, id = `${x},${z}`) => ({ id, position: new Vector3(x, 0.96, z), standing });
 
@@ -30,5 +32,26 @@ describe('blockedByTarget', () => {
   it('ignores downed and distant targets', () => {
     expect(blockedByTarget(p(0.8), p(0.9), [at(0, 1.0, false)])).toBe(false);
     expect(blockedByTarget(p(0.8), p(0.9), [at(0, 2.0)])).toBe(false);
+  });
+});
+
+describe('turnTowardAim', () => {
+  const dt = 1 / 60;
+
+  it('never flips a target behind the player in a single tick', () => {
+    const after = turnTowardAim(0, Math.PI - 0.01, dt);
+    expect(Math.abs(after)).toBeLessThan(Math.PI / 2);
+    expect(Math.abs(after)).toBeGreaterThan(0.5);
+  });
+
+  it('mostly finishes a 180° turn within the jab startup', () => {
+    let yaw = 0;
+    const aim = Math.PI - 0.01;
+    for (let t = 0; t < STRIKES.jab.startup; t += dt) yaw = turnTowardAim(yaw, aim, dt);
+    expect(Math.abs(wrapAngle(aim - yaw))).toBeLessThan(0.2);
+  });
+
+  it('takes the short way around', () => {
+    expect(turnTowardAim(3, -3, dt)).toBeGreaterThan(3);
   });
 });

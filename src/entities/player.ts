@@ -13,6 +13,8 @@ export const PLAYER_TUNING = {
   walkSpeed: 3,
   runSpeed: 6,
   turnRate: 12,
+  /** Exponential turn rate toward the auto-aim heading while a strike plays (180° ≈ done in 0.08 s). */
+  aimTurnRate: 40,
   lockOnRange: 2.5,
   blockDistance: 0.5,
 };
@@ -56,10 +58,17 @@ export function blockedByTarget(current: THREE.Vector3, next: THREE.Vector3, tar
   });
 }
 
+/** One tick of the smooth turn toward the strike's aim heading. */
+export function turnTowardAim(yaw: number, aimYaw: number, dt: number): number {
+  return lerpAngle(yaw, aimYaw, 1 - Math.exp(-PLAYER_TUNING.aimTurnRate * dt));
+}
+
 export class Player {
   readonly animator = new Animator(STANCE);
   attack: AttackState = createAttackState();
   yaw = 0;
+  /** Heading the current strike turns toward (nearest target, else the camera). */
+  aimYaw = 0;
   readonly position: THREE.Vector3;
 
   constructor(readonly figure: Figure, position: THREE.Vector3) {
@@ -72,7 +81,7 @@ export class Player {
     const wanted = input.strikes[0];
     if (wanted && canAttack(this.attack)) {
       const target = pickTarget(this.position, targets);
-      this.yaw = target
+      this.aimYaw = target
         ? yawToward({ x: this.position.x, z: this.position.z }, { x: target.position.x, z: target.position.z })
         : input.cameraYaw;
       this.attack = startAttack(this.attack, wanted);
@@ -80,6 +89,7 @@ export class Player {
     } else {
       this.attack = tickAttack(this.attack, dt);
     }
+    if (!canAttack(this.attack)) this.yaw = turnTowardAim(this.yaw, this.aimYaw, dt);
 
     let speed = 0;
     if (canAttack(this.attack) && input.move.lengthSq() > 0) {

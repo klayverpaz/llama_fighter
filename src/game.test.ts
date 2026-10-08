@@ -5,6 +5,7 @@ import { Game } from './game';
 import { PELVIS_HEIGHT } from './figure/skeleton';
 import { NPC_MAX_HP, STRIKES } from './combat/strikes';
 import type { PlayerInput } from './entities/player';
+import { findHits } from './combat/hits';
 
 const DT = 1 / 60;
 const idle: PlayerInput = { move: new THREE.Vector3(), run: false, strikes: [], cameraYaw: 0 };
@@ -52,6 +53,29 @@ describe('Game', () => {
 
     game.step(DT, { ...idle, strikes: ['frontKick'] });
     run(1.0);
+    expect(game.knockouts).toBe(1);
+
+    // A kick that lands while the NPC is getting back up does nothing.
+    let waited = 0;
+    while (npc.state !== 'recovering') {
+      expect(waited, 'NPC never started recovering').toBeLessThan(9);
+      game.step(DT, idle);
+      waited += DT;
+    }
+    // Put the player in front of the recovering NPC, aimed at it, so the kick really overlaps it.
+    const toNpc = new THREE.Vector3(npc.position.x, 0, npc.position.z).sub(new THREE.Vector3(game.player.position.x, 0, game.player.position.z)).normalize();
+    game.player.position.set(npc.position.x - toNpc.x * 0.9, PELVIS_HEIGHT, npc.position.z - toNpc.z * 0.9);
+    const aim = Math.atan2(toNpc.x, toNpc.z);
+    game.player.yaw = aim;
+    game.step(DT, { ...idle, strikes: ['frontKick'], cameraYaw: aim });
+    let overlapped = false;
+    for (let i = 0; i < Math.round(0.5 / DT); i++) {
+      game.step(DT, { ...idle, cameraYaw: aim });
+      const active = game.player.activeStrike();
+      if (active && findHits(physics, active.point, active.strike.hitRadius, 'player').some((h) => h.figureId === npc.id)) overlapped = true;
+    }
+    expect(overlapped).toBe(true);
+    expect(npc.hp).toBe(NPC_MAX_HP);
     expect(game.knockouts).toBe(1);
 
     run(9);
