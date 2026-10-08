@@ -7,7 +7,8 @@ export interface SceneSetup {
   resize(): void;
 }
 
-export function createScene(container: HTMLElement): SceneSetup {
+/** `lowPower` (phones): lower pixel ratio and shadow resolution. */
+export function createScene(container: HTMLElement, lowPower = false): SceneSetup {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0xf3eee2);
 
@@ -18,14 +19,14 @@ export function createScene(container: HTMLElement): SceneSetup {
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowMap;
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, lowPower ? 1.5 : 2));
   container.appendChild(renderer.domElement);
 
   scene.add(new THREE.HemisphereLight(0xffffff, 0xcbbfa3, 0.9));
   const sun = new THREE.DirectionalLight(0xffffff, 1.4);
   sun.position.set(8, 14, 6);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.mapSize.set(lowPower ? 1024 : 2048, lowPower ? 1024 : 2048);
   const sc = sun.shadow.camera;
   sc.left = -20; sc.right = 20; sc.top = 20; sc.bottom = -20; sc.far = 60;
   scene.add(sun);

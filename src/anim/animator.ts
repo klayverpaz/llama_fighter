@@ -29,7 +29,7 @@ export class Animator {
   private walkIntensity = 0;
   private current: JointRots = identityJointRots();
 
-  constructor(private readonly base: Clip) {}
+  constructor(private base: Clip) {}
 
   get actionName(): string | null {
     return this.action?.clip.name ?? null;
@@ -40,6 +40,15 @@ export class Animator {
     this.action = { clip, time: 0 };
     if (blendSeconds > 0) this.blendFromRots(this.current, blendSeconds);
     else this.blend = null;
+  }
+
+  /** Swap the looping base clip (e.g. fists ↔ rifle), blending from the current output. */
+  setBase(clip: Clip, blendSeconds = 0.25): void {
+    if (clip === this.base) return;
+    this.base = clip;
+    this.baseTime = 0;
+    this.action = null;
+    this.blendFromRots(this.current, blendSeconds);
   }
 
   /** Drop any one-shot clip and pending blend (e.g. a flinch interrupted by a KO). */

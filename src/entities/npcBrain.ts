@@ -20,6 +20,8 @@ export const NPC_TUNING = {
   recoverSeconds: 0.8,
   flinchSeconds: 0.3,
   pushbackDistance: 0.3,
+  /** A bullet that doesn't drop the NPC staggers it back a little. */
+  shotPushbackDistance: 0.12,
   pushbackSeconds: 0.2,
 };
 
@@ -29,6 +31,10 @@ export interface SteerInput {
   /** Other standing NPCs. */
   others: Vec2[];
   state: NpcMoveState;
+  /** Extra stand-off from the player (e.g. a mounted player is as long as a llama). */
+  margin?: number;
+  /** Walking speed override (zombies get faster every wave). */
+  speed?: number;
 }
 
 export interface SteerOutput {
@@ -42,14 +48,14 @@ export function yawToward(from: Vec2, to: Vec2): number {
   return Math.atan2(to.x - from.x, to.z - from.z);
 }
 
-export function steer({ self, player, others, state }: SteerInput): SteerOutput {
+export function steer({ self, player, others, state, margin = 0, speed = NPC_TUNING.speed }: SteerInput): SteerOutput {
   const dx = player.x - self.x;
   const dz = player.z - self.z;
   const dist = Math.hypot(dx, dz);
 
   let next = state;
-  if (state === 'chase' && dist <= NPC_TUNING.holdDistance) next = 'hold';
-  else if (state === 'hold' && dist >= NPC_TUNING.resumeDistance) next = 'chase';
+  if (state === 'chase' && dist <= NPC_TUNING.holdDistance + margin) next = 'hold';
+  else if (state === 'hold' && dist >= NPC_TUNING.resumeDistance + margin) next = 'chase';
 
   // Push-apart terms first, so they can veto the chase.
   let sx = 0;
@@ -64,22 +70,24 @@ export function steer({ self, player, others, state }: SteerInput): SteerOutput 
       sz += (oz / d) * k;
     }
   }
-  if (dist < NPC_TUNING.minPlayerDistance && dist > 1e-6) {
-    const k = (1 - dist / NPC_TUNING.minPlayerDistance) * NPC_TUNING.playerPushStrength;
+  const minPlayer = NPC_TUNING.minPlayerDistance + margin;
+  if (dist < minPlayer && dist > 1e-6) {
+    const k = (1 - dist / minPlayer) * NPC_TUNING.playerPushStrength;
     sx -= (dx / dist) * k;
     sz -= (dz / dist) * k;
   }
 
   // The chase fades out as the push grows; the result never exceeds the walking speed.
   const chase = next === 'chase' && dist > 1e-6
-    ? Math.max(0, 1 - Math.hypot(sx, sz) / NPC_TUNING.chaseCancelPush) * NPC_TUNING.speed
+    ? Math.max(0, 1 - Math.hypot(sx, sz) / NPC_TUNING.chaseCancelPush) * speed
     : 0;
   let vx = chase > 0 ? (dx / dist) * chase + sx : sx;
   let vz = chase > 0 ? (dz / dist) * chase + sz : sz;
   const v = Math.hypot(vx, vz);
-  if (v > NPC_TUNING.speed) {
-    vx *= NPC_TUNING.speed / v;
-    vz *= NPC_TUNING.speed / v;
+  const cap = Math.max(speed, NPC_TUNING.speed);
+  if (v > cap) {
+    vx *= cap / v;
+    vz *= cap / v;
   }
   return { velocity: { x: vx, z: vz }, yaw: yawToward(self, player), state: next };
 }

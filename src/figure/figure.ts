@@ -50,8 +50,11 @@ export class Figure {
   private readonly joints: RAPIER.ImpulseJoint[] = [];
   private rootBlend: RootBlend | null = null;
 
+  private readonly baseColor: number;
+
   constructor(private readonly physics: Physics, scene: THREE.Scene, opts: FigureOptions) {
     this.id = opts.id;
+    this.baseColor = opts.color;
     const world = physics.world;
     const rest = forwardKinematics({
       root: { position: opts.position.clone(), rotation: yawQuaternion(opts.yaw ?? 0) },
@@ -150,6 +153,57 @@ export class Figure {
       b.setAngvel(av, true);
     }
     if (hit) this.bodies[hit.segment].applyImpulseAtPoint(hit.impulse, hit.point, true);
+  }
+
+  /** Recolour the whole figure (ice, electric flash, anti-gravity glow); null restores its own colour. */
+  setTint(color: number | null): void {
+    const mat = this.meshes.pelvis.material as THREE.MeshToonMaterial;
+    mat.color.setHex(color ?? this.baseColor);
+  }
+
+  /** Gravity multiplier for every segment (negative floats upward). */
+  setGravityScale(scale: number): void {
+    for (const name of SEGMENT_NAMES) this.bodies[name].setGravityScale(scale, true);
+  }
+
+  /**
+   * Ragdoll mode only: throw every segment away from `center` (plus lift). `speed` is the velocity change at the
+   * centre, fading to zero at `radius`; impulses scale with each segment's mass so the body flies as one piece.
+   */
+  blast(center: THREE.Vector3, radius: number, speed: number): void {
+    if (this.mode !== 'ragdoll') return;
+    for (const name of SEGMENT_NAMES) {
+      const b = this.bodies[name];
+      const t = b.translation();
+      const away = new THREE.Vector3(t.x - center.x, t.y - center.y, t.z - center.z);
+      const d = away.length();
+      if (d >= radius) continue;
+      const k = 1 - d / radius;
+      away.normalize().add(new THREE.Vector3(0, 0.9, 0)).normalize().multiplyScalar(speed * k * b.mass());
+      b.applyImpulse(away, true);
+    }
+  }
+
+  /** Distance from `point` to the nearest segment centre. */
+  distanceTo(point: THREE.Vector3): number {
+    let best = Infinity;
+    for (const name of SEGMENT_NAMES) {
+      const t = this.bodies[name].translation();
+      best = Math.min(best, Math.hypot(t.x - point.x, t.y - point.y, t.z - point.z));
+    }
+    return best;
+  }
+
+  /** World position of one segment's body. */
+  segmentPosition(name: SegmentName): THREE.Vector3 {
+    const t = this.bodies[name].translation();
+    return new THREE.Vector3(t.x, t.y, t.z);
+  }
+
+  /** Ragdoll mode only: push one segment (e.g. a bullet hitting a body already on the ground). */
+  applyImpulse(segment: SegmentName, impulse: THREE.Vector3, point: THREE.Vector3): void {
+    if (this.mode !== 'ragdoll') return;
+    this.bodies[segment].applyImpulseAtPoint(impulse, point, true);
   }
 
   toPosed(): void {

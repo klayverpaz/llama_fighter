@@ -9,6 +9,12 @@ export const CAMERA_TUNING = {
   maxPitch: 60 * (Math.PI / 180),
   smoothing: 12,
   minHeight: 0.3,
+  /** Over-the-shoulder aim: closer, offset to the right, higher, narrower field of view. */
+  aimDistance: 2.1,
+  aimShoulderOffset: 0.75,
+  aimFocusAbovePelvis: 0.6,
+  fov: 60,
+  aimFov: 45,
 };
 
 /** Camera position relative to the focus point. Positive pitch looks down from above. */
@@ -42,13 +48,30 @@ export class ThirdPersonCamera {
     this.pitch = clamp(this.pitch + dy * CAMERA_TUNING.sensitivity, CAMERA_TUNING.minPitch, CAMERA_TUNING.maxPitch);
   }
 
-  /** `focus` is the pelvis position; the camera looks slightly above it. */
-  update(focus: THREE.Vector3, dt: number): void {
+  /** Screen-right on the ground for the current yaw (−X when looking along +Z). */
+  right(): THREE.Vector3 {
+    return new THREE.Vector3(-Math.cos(this.yaw), 0, Math.sin(this.yaw));
+  }
+
+  /**
+   * `focus` is the pelvis position; the camera looks slightly above it.
+   * `aim` 0..1 blends to the over-the-shoulder aiming view.
+   */
+  update(focus: THREE.Vector3, dt: number, aim = 0): void {
+    const t = aim * aim * (3 - 2 * aim);
     const target = focus.clone();
-    target.y = focus.y + CAMERA_TUNING.focusAbovePelvis; // look at chest height
-    const desired = target.clone().add(cameraOffset(this.yaw, this.pitch, CAMERA_TUNING.distance));
+    target.y = focus.y + THREE.MathUtils.lerp(CAMERA_TUNING.focusAbovePelvis, CAMERA_TUNING.aimFocusAbovePelvis, t);
+    target.addScaledVector(this.right(), CAMERA_TUNING.aimShoulderOffset * t);
+    const distance = THREE.MathUtils.lerp(CAMERA_TUNING.distance, CAMERA_TUNING.aimDistance, t);
+    const fov = THREE.MathUtils.lerp(CAMERA_TUNING.fov, CAMERA_TUNING.aimFov, t);
+    if (Math.abs(this.camera.fov - fov) > 0.01) {
+      this.camera.fov = fov;
+      this.camera.updateProjectionMatrix();
+    }
+    const desired = target.clone().add(cameraOffset(this.yaw, this.pitch, distance));
     desired.y = Math.max(desired.y, CAMERA_TUNING.minHeight);
-    const k = 1 - Math.exp(-CAMERA_TUNING.smoothing * dt);
+    // While aiming the camera must not lag: the crosshair has to sit exactly where the rifle points.
+    const k = 1 - Math.exp(-THREE.MathUtils.lerp(CAMERA_TUNING.smoothing, 40, t) * dt);
     this.camera.position.lerp(desired, k);
     this.camera.lookAt(target);
   }
