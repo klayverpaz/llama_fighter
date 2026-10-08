@@ -213,6 +213,17 @@ export class Effects {
     this.puff(point, 0xf3ead8, 0.1, 0.6, 0.35, 0.2, false);
   }
 
+  /** Dust ring when landing from a jump (strength 0..1). */
+  dust(point: THREE.Vector3, strength: number): void {
+    for (let i = 0; i < 6 + Math.round(8 * strength); i++) {
+      const a = Math.random() * Math.PI * 2;
+      const m = new THREE.Mesh(this.sparkGeo, this.dustMat);
+      m.position.copy(point).add(new THREE.Vector3(0, 0.05, 0));
+      const v = new THREE.Vector3(Math.sin(a), 0.4, Math.cos(a)).multiplyScalar(1.5 + 2.5 * strength);
+      this.spawn(m, v, 0.35, false, true, new THREE.Vector3());
+    }
+  }
+
   /** Dirt thrown up where a zombie climbs out of the ground. */
   dirt(point: THREE.Vector3): void {
     for (let i = 0; i < 12; i++) {

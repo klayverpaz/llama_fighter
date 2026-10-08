@@ -57,6 +57,9 @@ export class ThirdPersonCamera {
    * `focus` is the pelvis position; the camera looks slightly above it.
    * `aim` 0..1 blends to the over-the-shoulder aiming view.
    */
+  /** Optional: pull the camera in front of scenery between it and the player. */
+  clip?: (from: THREE.Vector3, to: THREE.Vector3) => THREE.Vector3;
+
   update(focus: THREE.Vector3, dt: number, aim = 0): void {
     const t = aim * aim * (3 - 2 * aim);
     const target = focus.clone();
@@ -69,7 +72,8 @@ export class ThirdPersonCamera {
       this.camera.updateProjectionMatrix();
     }
     const desired = target.clone().add(cameraOffset(this.yaw, this.pitch, distance));
-    desired.y = Math.max(desired.y, CAMERA_TUNING.minHeight);
+    desired.y = Math.max(desired.y, focus.y < -1 ? -Infinity : CAMERA_TUNING.minHeight);
+    if (this.clip) desired.copy(this.clip(target, desired));
     // While aiming the camera must not lag: the crosshair has to sit exactly where the rifle points.
     const k = 1 - Math.exp(-THREE.MathUtils.lerp(CAMERA_TUNING.smoothing, 40, t) * dt);
     this.camera.position.lerp(desired, k);

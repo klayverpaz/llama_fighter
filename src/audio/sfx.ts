@@ -160,6 +160,50 @@ export class Sfx {
     this.burst({ duration: 1.0, gain: 0.25, type: 'bandpass', freq: 450 + Math.random() * 250, freqEnd: 260, q: 5 });
   }
 
+  /** Runner screech. */
+  screech(): void {
+    this.tone(900, 1500, 0.35, 0.18, 'sawtooth');
+    this.burst({ duration: 0.4, gain: 0.25, type: 'bandpass', freq: 2200, q: 4 });
+  }
+
+  /** Brute / boss roar (bigger = deeper and longer). */
+  roar(big = false): void {
+    const f = big ? 48 : 62;
+    this.tone(f * 1.4, f, big ? 1.8 : 1.1, big ? 0.7 : 0.5, 'sawtooth');
+    this.tone(f * 2.1, f * 1.6, big ? 1.6 : 1.0, 0.25, 'square', 0.05);
+    this.burst({ duration: big ? 1.6 : 1.0, gain: 0.45, type: 'lowpass', freq: 700, freqEnd: 150, rate: 0.7 });
+  }
+
+  /** Rotten llama: a wobbly, wrong-sounding "mwaa". */
+  zombieLlama(): void {
+    this.tone(260, 140, 0.5, 0.35, 'sawtooth');
+    this.tone(150, 90, 0.6, 0.3, 'sawtooth', 0.35);
+    this.burst({ duration: 0.8, gain: 0.2, type: 'bandpass', freq: 500, q: 6, delay: 0.1 });
+  }
+
+  /** Bombardeiro fuse. */
+  fuse(): void {
+    this.burst({ duration: 0.5, gain: 0.25, type: 'highpass', freq: 4000 });
+    this.tone(1200, 1800, 0.08, 0.15, 'square');
+  }
+
+  jump(): void {
+    this.burst({ duration: 0.18, gain: 0.25, type: 'bandpass', freq: 500, freqEnd: 1400, q: 1 });
+  }
+
+  land(speed: number): void {
+    const k = Math.min(1, speed / 10);
+    this.burst({ duration: 0.12 + 0.1 * k, gain: 0.4 + 0.6 * k, type: 'lowpass', freq: 500, freqEnd: 80 });
+    this.tone(90, 45, 0.15, 0.3 + 0.4 * k, 'sine');
+  }
+
+  /** Falling into the void: a long, fading "aaaaa" sliding down. */
+  fall(): void {
+    this.tone(620, 180, 2.4, 0.3, 'sawtooth');
+    this.tone(930, 260, 2.4, 0.12, 'triangle');
+    this.burst({ duration: 2.4, gain: 0.25, type: 'bandpass', freq: 900, freqEnd: 200, q: 3 });
+  }
+
   hurt(): void {
     this.burst({ duration: 0.14, gain: 1.0, type: 'lowpass', freq: 600, freqEnd: 90 });
     this.tone(150, 55, 0.25, 0.8, 'square');

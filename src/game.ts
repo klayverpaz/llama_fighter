@@ -16,9 +16,14 @@ import { GUN_POINTS, HOLSTER_SIDE } from './weapons/gunPoints';
 import { holsterPose } from './entities/rifleRig';
 import { ringPositions } from './entities/npcBrain';
 import { LLAMA, Llama } from './entities/llama';
+import { ZOMBIE_KINDS, mixColor } from './modes/zombieTypes';
+import { pushOut, type Obstacle } from './world/obstacles';
+import { createObstacleMesh } from './world/obstacleMeshes';
+import { SAMURAI_BODY_COLOR, dressAsSamurai } from './figure/samurai';
+import { ARENA, onIsland } from './world/arena';
 import { findHits } from './combat/hits';
 
-export const PLAYER_COLOR = 0x2a6fdb;
+export const PLAYER_COLOR = SAMURAI_BODY_COLOR;
 export const NPC_COLOR = 0xd94a3a;
 export const ZOMBIE_COLOR = 0x6f9a4a;
 
@@ -64,6 +69,11 @@ export type GameEvent =
   | { kind: 'smoke'; point: THREE.Vector3 }
   | { kind: 'explosion'; point: THREE.Vector3; knockouts: number }
   | { kind: 'llamaBonk'; point: THREE.Vector3; hitNpc: boolean; knockedOut: boolean }
+  | { kind: 'steedDown'; point: THREE.Vector3 }
+  | { kind: 'jump' }
+  | { kind: 'land'; point: THREE.Vector3; speed: number }
+  | { kind: 'fell' }
+  | { kind: 'respawn' }
   | WaveEvent;
 
 interface Projectile {
@@ -103,6 +113,9 @@ export class Game implements WaveHost {
     llamaCannon: createLlamaCannonModel(),
   };
   readonly projectiles: Projectile[] = [];
+  private readonly obstacleMeshes: THREE.Object3D[] = [];
+  private readonly obstacleBodies: RAPIER.RigidBody[] = [];
+  private respawnTimer = 0;
   readonly llamaProps: LlamaProp[] = [];
   readonly scene: THREE.Scene;
   /** Zombie wave mode, or null in training. */
@@ -122,11 +135,27 @@ export class Game implements WaveHost {
     npcCount: number,
     readonly random: () => number = Math.random,
     readonly mode: GameMode = 'training',
+    /** Solid obstacles on the island (a fresh random layout per match; none by default). */
+    readonly obstacles: Obstacle[] = [],
   ) {
     this.scene = scene;
+    for (const o of obstacles) {
+      const mesh = createObstacleMesh(o);
+      scene.add(mesh);
+      this.obstacleMeshes.push(mesh);
+      const body = physics.world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(o.x, 0, o.z)
+        .setRotation(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), o.shape === 'box' ? o.rot : 0)));
+      const desc = o.shape === 'box'
+        ? RAPIER.ColliderDesc.cuboid(o.w / 2, o.h / 2, o.d / 2)
+        : RAPIER.ColliderDesc.cylinder(o.h / 2, o.r);
+      physics.world.createCollider(desc.setTranslation(0, o.h / 2, 0).setFriction(0.8), body);
+      this.obstacleBodies.push(body);
+    }
     scene.add(this.ak.group, this.shotgun.group, ...Object.values(this.specials).map((m) => m.group));
     const origin = new THREE.Vector3(0, PELVIS_HEIGHT, 0);
     this.player = new Player(new Figure(physics, scene, { id: 'player', color: PLAYER_COLOR, position: origin }), origin);
+    this.player.obstacles = obstacles;
+    dressAsSamurai(this.player.figure);
     this.llama = new Llama(physics, scene, this.player.figure.id);
     if (mode === 'waves') this.waves = new WaveMode(this);
     ringPositions(mode === 'waves' ? 0 : npcCount).forEach((p, i) => {
@@ -139,20 +168,75 @@ export class Game implements WaveHost {
     });
   }
 
+  private collideNpc = (p: THREE.Vector3) => {
+    if (this.obstacles.length === 0) return;
+    const q = pushOut(this.obstacles, p.x, p.z, 0.35, 0);
+    p.x = q.x;
+    p.z = q.z;
+  };
+
+  /** After falling off: in training, back to the middle of the island; in wave mode, the void kills. */
+  private updateFall(dt: number): void {
+    const p = this.player;
+    if (!p.fellOff) return;
+    if (p.figure.pelvisPosition().y > ARENA.voidY) return;
+    if (this.waves) {
+      this.waves.voidDeath();
+      return;
+    }
+    this.respawnTimer += dt;
+    if (this.respawnTimer > 0.2) {
+      this.respawnTimer = 0;
+      if (p.mounted) p.mounted = false;
+      p.respawn();
+      this.events.push({ kind: 'respawn' });
+    }
+  }
+
+  /**
+   * Keep the camera out of pillars and walls: the closest point along `from → to` that isn't inside the
+   * scenery (only fixed things — the island and obstacles — count).
+   */
+  cameraClip(from: THREE.Vector3, to: THREE.Vector3): THREE.Vector3 {
+    const dir = to.clone().sub(from);
+    const len = dir.length();
+    if (len < 1e-4) return to.clone();
+    dir.divideScalar(len);
+    const hit = this.physics.world.castRay(new RAPIER.Ray(from, dir), len, true, undefined, undefined, undefined, undefined,
+      (c) => !!c.parent()?.isFixed());
+    if (!hit) return to.clone();
+    return from.clone().addScaledVector(dir, Math.max(0.3, hit.timeOfImpact - 0.25));
+  }
+
   emit(event: WaveEvent): void {
     this.events.push(event);
   }
 
   spawnZombie(position: THREE.Vector3, yaw: number, config: ZombieConfig): Npc {
     const id = `zombie-${this.zombieCount++}`;
-    const npc = new Npc(new Figure(this.physics, this.scene, { id, color: ZOMBIE_COLOR, position, yaw }), position, config);
+    const spec = ZOMBIE_KINDS[config.kind ?? 'walker'];
+    // Every zombie a slightly different shade so a horde doesn't look cloned.
+    const color = config.kind ? mixColor(spec.skin, this.random() < 0.5 ? 0x2b2620 : 0xf3eee2, this.random() * 0.22) : ZOMBIE_COLOR;
+    const figure = new Figure(this.physics, this.scene, { id, color, position, yaw });
+    figure.setBulk(spec.bulk, spec.head);
+    figure.addEyes(spec.eyes);
+    if (config.kind === 'boss') figure.addCrown();
+    const npc = new Npc(figure, position, config);
+    if (config.kind === 'cavalry') npc.steed = new Llama(this.physics, this.scene, id, 'zombie');
     npc.yaw = yaw;
     this.npcs.push(npc);
     this.byId.set(id, npc);
     return npc;
   }
 
+  /** Rocket-sized blast at a point (Bombardeiro zombies). */
+  blastAt(point: THREE.Vector3): void {
+    this.explode(point);
+  }
+
   removeNpc(npc: Npc): void {
+    npc.steed?.dispose();
+    npc.steed = null;
     const i = this.npcs.indexOf(npc);
     if (i >= 0) this.npcs.splice(i, 1);
     this.byId.delete(npc.id);
@@ -177,6 +261,10 @@ export class Game implements WaveHost {
     if (rifleEvents.reloadFinished) this.events.push({ kind: 'reloadEnd' });
     if (rifleEvents.swapped) this.events.push({ kind: 'swap' });
     if (rifleEvents.mounted) this.events.push({ kind: 'mount' });
+    if (rifleEvents.jumped) this.events.push({ kind: 'jump' });
+    if (rifleEvents.landed > 0) this.events.push({ kind: 'land', point: this.player.position.clone().setY(this.player.feetY), speed: rifleEvents.landed });
+    if (rifleEvents.fell) this.events.push({ kind: 'fell' });
+    this.updateFall(dt);
     if (rifleEvents.shellLoaded) this.events.push({ kind: 'shellLoaded' });
     if (rifleEvents.pumped && this.player.gun) {
       const port = GUN_POINTS.shotgun.ejectionPort.clone().applyQuaternion(this.player.gun.gunRotation).add(this.player.gun.gunPosition);
@@ -190,7 +278,7 @@ export class Game implements WaveHost {
     }
     if (this.player.mounted) this.parkedLlama = null;
 
-    if (this.player.mounted) this.llama.update(dt, this.player.position, this.player.yaw, this.player.speed, true);
+    if (this.player.mounted) this.llama.update(dt, this.player.position, this.player.yaw, this.player.speed, true, this.player.feetY);
     else if (this.parkedLlama) this.llama.update(dt, this.parkedLlama.position, this.parkedLlama.yaw, 0, true);
     else this.llama.update(dt, this.player.position, 0, 0, false);
     this.player.rideBob = this.llama.saddleBob();
@@ -201,10 +289,24 @@ export class Game implements WaveHost {
     let clawDamage = 0;
     for (const npc of this.npcs) {
       const others = standing.filter((o) => o !== npc).map((o) => o.ground);
-      clawDamage += npc.update(dt, playerGround, others, margin);
+      clawDamage += npc.update(dt, playerGround, others, margin, this.collideNpc);
+      // A dead rider takes the zombie llama with him.
+      if (npc.steed && npc.state === 'ragdoll') {
+        this.events.push({ kind: 'steedDown', point: npc.position.clone().setY(0.6) });
+        npc.steed.dispose();
+        npc.steed = null;
+      }
     }
 
     this.physics.step();
+
+    // Shoved past the edge of the island: over it goes (after the step, so the bodies are really out there).
+    for (const npc of this.npcs) {
+      if (npc.standing && !onIsland(npc.position.x, npc.position.z)) {
+        const out = npc.position.clone().setY(0).normalize();
+        npc.kill(out.add(new THREE.Vector3(0, 0.3, 0)));
+      }
+    }
 
     const active = this.player.activeStrike();
     if (active) {
@@ -513,7 +615,10 @@ export class Game implements WaveHost {
   }
 
   dispose(): void {
+    for (const m of this.obstacleMeshes) m.removeFromParent();
+    for (const b of this.obstacleBodies) this.physics.world.removeRigidBody(b);
     this.waves?.dispose();
+    for (const npc of this.npcs) npc.steed?.dispose();
     for (const pr of this.projectiles) pr.mesh.removeFromParent();
     this.projectiles.length = 0;
     while (this.llamaProps.length) this.removeProp(0);

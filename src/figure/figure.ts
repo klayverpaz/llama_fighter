@@ -155,6 +155,53 @@ export class Figure {
     if (hit) this.bodies[hit.segment].applyImpulseAtPoint(hit.impulse, hit.point, true);
   }
 
+  /**
+   * Bulk up (or slim down) the drawn body: limbs and torso get thicker by `bulk`, the head scales by `head`.
+   * Purely visual — the physics capsules stay the same.
+   */
+  setBulk(bulk: number, head = 1): void {
+    for (const name of SEGMENT_NAMES) {
+      const m = this.meshes[name];
+      if (name === 'head') m.scale.setScalar(head);
+      else if (name === 'torso' || name === 'pelvis') m.scale.set(bulk * 1.05, 1 + (bulk - 1) * 0.12, bulk);
+      else m.scale.set(bulk, 1, bulk);
+    }
+  }
+
+  /** Attach a decoration to a segment's mesh (it moves with that body part, also as a ragdoll). */
+  attach(segment: SegmentName, object: THREE.Object3D): void {
+    object.traverse((o) => { if ((o as THREE.Mesh).isMesh) o.castShadow = true; });
+    this.meshes[segment].add(object);
+  }
+
+  /** Glowing eyes on the face (zombies). */
+  addEyes(color: number): void {
+    const mat = new THREE.MeshBasicMaterial({ color });
+    const geo = new THREE.SphereGeometry(0.022, 8, 6);
+    for (const side of [-1, 1]) {
+      const eye = new THREE.Mesh(geo, mat);
+      eye.position.set(side * 0.045, 0.025, 0.102);
+      this.meshes.head.add(eye);
+    }
+  }
+
+  /** A little golden crown on the head (the boss). */
+  addCrown(): void {
+    const gold = new THREE.MeshToonMaterial({ color: 0xffd23a });
+    const crown = new THREE.Group();
+    const band = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.08, 0.045, 14, 1, true), gold);
+    crown.add(band);
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      const spike = new THREE.Mesh(new THREE.ConeGeometry(0.018, 0.06, 6), gold);
+      spike.position.set(Math.sin(a) * 0.07, 0.05, Math.cos(a) * 0.07);
+      crown.add(spike);
+    }
+    crown.position.y = 0.11;
+    crown.traverse((o) => { (o as THREE.Mesh).castShadow = true; });
+    this.meshes.head.add(crown);
+  }
+
   /** Recolour the whole figure (ice, electric flash, anti-gravity glow); null restores its own colour. */
   setTint(color: number | null): void {
     const mat = this.meshes.pelvis.material as THREE.MeshToonMaterial;

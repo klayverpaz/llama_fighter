@@ -2,6 +2,12 @@
 
 Joguinho 3D no browser: um boneco de palito em terceira pessoa dá golpes de kickboxing ou atira de AK-47 e escopeta em NPCs que o seguem. NPCs nocauteados caem de ragdoll (Rapier), levantam e voltam.
 
+## A ilha
+
+A arena é uma ilha flutuante: passou da borda, cai no vazio. No Modo Zumbi cair é morte ("CAIU NO LIMBO"); no Treino você reaparece no centro. Zumbis empurrados para fora (explosão, tiro, chute) também caem e contam como abate.
+
+Cada partida gera um layout novo de obstáculos: caixotes (alguns empilhados), muros baixos de pedra, pilares e rochas. Eles são sólidos — param balas, foguetes e corpos, e os zumbis precisam contorná-los. Caixotes e muros baixos dá para subir pulando; pilares e rochas não. O jogador é um samurai: kabuto com chifres dourados, armadura laqueada vermelha, katana na cintura e estandarte nas costas.
+
 ## Modo Zumbi (ondas)
 
 Inspirado no Call of Duty Zombies. Os zumbis saem do chão nas bordas da arena: a onda N traz 5×N zumbis (5, 10, 15…) até o máximo de 40 por onda, com no máximo 24 vivos ao mesmo tempo. A cada onda eles têm mais vida, andam mais rápido (de arrastados a corredores) e batem mais forte.
@@ -10,6 +16,19 @@ Inspirado no Call of Duty Zombies. Os zumbis saem do chão nas bordas da arena: 
 - **Pontos**: 10 por acerto, 60 por abate. Começa com $500, os punhos e a AK-47 com munição limitada.
 - **Caixa Misteriosa** ($950, tecla E): sorteia uma arma nova (escopeta, bazuca, congelante, Tesla, antigravidade ou lança-lhamas).
 - **Power-ups** que caem dos zumbis: Munição Máxima, Insta-Kill (15 s, qualquer acerto mata) e Nuke (mata todos os zumbis vivos).
+
+**Tipos de zumbi** (cada onda libera algo novo, e os tipos novos ficam mais comuns):
+
+| Desde a onda | Tipo | Como é |
+|---|---|---|
+| 1 | Andarilho | Verde, olhos amarelos. |
+| 2 | Corredor | Pálido e magro, olhos vermelhos: rápido e frágil. |
+| 3 | Bombardeiro | Laranja e pulsando: explode quando morre ou quando te alcança, derrubando os zumbis em volta (reação em cadeia). |
+| 4 | Brutamontes | Roxo e parrudo, olhos azuis: aguenta muito e bate forte. |
+| 5 | Cavaleiro Zumbi | Montado numa **lhama zumbi** (lã podre, costelas à mostra, olhos vermelhos): rápido; tiro na lhama fere o cavaleiro, e ela cai quando ele morre. |
+| 5, 10, 15… | Rei Brutamontes | Chefão gigante, dourado e de coroa, com barra de vida própria. |
+
+Nenhum golpe tira mais de 60 de vida (a vida é 100), nem do chefão. O céu escurece a cada onda: dia, entardecer, crepúsculo e, da onda 7 em diante, noite com neblina e lua de sangue.
 
 O Treino livre continua disponível na tela inicial, com todas as armas e bonecos que levantam.
 
@@ -26,6 +45,7 @@ Abra a URL impressa. Escolha a quantidade de inimigos (ou use `?npcs=12`) e cliq
 |---|---|
 | Mover | W A S D (relativo à câmera) |
 | Correr | Shift |
+| Pular | Espaço (no celular, botão Pular) |
 | Câmera | Mouse |
 | Jab / Direto | J / K |
 | Cruzado esquerdo / direito | U / I |

@@ -33,8 +33,10 @@ export interface Overlay {
   setWaveHud(hud: WaveHud | null): void;
   /** Red flash when the player is hit. */
   hurt(): void;
-  showGameOver(stats: { wave: number; kills: number; points: number }, onRetry: () => void, onTraining: () => void): void;
+  showGameOver(stats: { wave: number; kills: number; points: number; reason?: 'zombies' | 'void' }, onRetry: () => void, onTraining: () => void): void;
   setKillsLabel(label: string): void;
+  /** Boss health bar at the top; null hides it. */
+  setBossBar(boss: { name: string; hp: number; max: number } | null): void;
 }
 
 const CSS = `
@@ -104,6 +106,11 @@ const CSS = `
 .kb-prompt { position: absolute; left: 50%; bottom: 120px; transform: translateX(-50%); pointer-events: none;
   font: 700 16px ui-sans-serif, system-ui; color: #fffdf7; background: rgba(43, 38, 32, 0.8); padding: 8px 14px; border-radius: 8px; }
 .kb-prompt.no { color: #ffb3a8; }
+.kb-boss { position: absolute; left: 50%; top: 92px; transform: translateX(-50%); width: min(420px, 70vw); pointer-events: none; text-align: center; }
+.kb-boss[hidden] { display: none; }
+.kb-boss .name { font: 900 15px ui-sans-serif, system-ui; color: #ffd23a; letter-spacing: 0.12em; text-shadow: 2px 2px 0 #2b2620; }
+.kb-boss .bar { height: 12px; margin-top: 3px; border: 2px solid #2b2620; border-radius: 7px; background: rgba(43, 38, 32, 0.6); overflow: hidden; }
+.kb-boss .bar i { display: block; height: 100%; background: linear-gradient(90deg, #8e1b12, #e0412f); transition: width 0.12s; }
 body.kb-waves .kb-hud { display: none; }
 .kb-card .kb-mode { display: block; width: 100%; margin-top: 12px; }
 .kb-card .kb-mode.zombie { background: #4f7a32; font-size: 20px; }
@@ -115,7 +122,7 @@ body.kb-waves .kb-hud { display: none; }
 `;
 
 const TOUCH_CONTROLS = [
-  'Polegar esquerdo: joystick para andar (até a borda corre)',
+  'Polegar esquerdo: joystick para andar (até a borda corre) · Pular',
   'Arraste o lado direito para girar a câmera',
   'Botões de golpe · AK saca a arma',
   'Com a AK: FOGO atira (arraste para mirar) · MIRA alterna a mira',
@@ -124,7 +131,7 @@ const TOUCH_CONTROLS = [
 ];
 
 const CONTROLS = [
-  'WASD mover · Shift correr · Mouse câmera',
+  'WASD mover · Shift correr · Espaço pular · Mouse câmera',
   'J jab · K direto · U cruzado esq · I cruzado dir',
   'N low kick · M chute frontal · , high kick',
   'Q / roda do mouse troca arma · 1 mãos 2 AK 3 escopeta 4 bazuca',
@@ -200,7 +207,14 @@ export function createOverlay(root: HTMLElement, touch = false): Overlay {
   let killsLabel = 'Nocautes';
   let lastWave = '';
 
-  root.append(slow, blood, overlay, hud, ko, cross, hit, ammo, hint, bannerEl, wave, points, health, prompt);
+  const bossEl = document.createElement('div');
+  bossEl.className = 'kb-boss';
+  bossEl.innerHTML = '<div class="name"></div><div class="bar"><i></i></div>';
+  bossEl.hidden = true;
+  const bossName = bossEl.querySelector('.name') as HTMLElement;
+  const bossBar = bossEl.querySelector('.bar i') as HTMLElement;
+
+  root.append(slow, blood, overlay, hud, ko, cross, hit, ammo, hint, bannerEl, wave, points, health, prompt, bossEl);
 
   function show(html: string): HTMLElement {
     card.innerHTML = html;
@@ -257,13 +271,21 @@ export function createOverlay(root: HTMLElement, touch = false): Overlay {
           : h.box.affordable ? `${touch ? 'Toque em Usar' : 'E'} — Caixa Misteriosa ($950)` : 'Caixa Misteriosa — precisa de $950';
       }
     },
+    setBossBar(boss) {
+      bossEl.hidden = !boss || !overlay.hidden;
+      if (!boss) return;
+      const label = `♛ ${boss.name.toUpperCase()}`;
+      if (bossName.textContent !== label) bossName.textContent = label;
+      bossBar.style.width = `${Math.max(0, (boss.hp / boss.max) * 100)}%`;
+    },
     hurt() {
       blood.classList.add('flash');
       window.setTimeout(() => blood.classList.remove('flash'), 90);
     },
     showGameOver(stats, onRetry, onTraining) {
       const c = show(`
-        <h1 style="color:#c0392b">VOCÊ MORREU</h1>
+        <h1 style="color:#c0392b">${stats.reason === 'void' ? 'CAIU NO LIMBO' : 'VOCÊ MORREU'}</h1>
+        ${stats.reason === 'void' ? '<p>A ilha acaba na borda. Lá embaixo não tem nada.</p>' : ''}
         <p style="font-size:18px">Sobreviveu até a <b>onda ${stats.wave}</b></p>
         <p>${stats.kills} zumbis abatidos · $ ${stats.points}</p>
         <button id="kb-retry" class="kb-mode zombie">Jogar de novo</button>

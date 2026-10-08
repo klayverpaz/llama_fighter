@@ -13,14 +13,27 @@ import { Effects } from './fx/effects';
 import { Sfx } from './audio/sfx';
 import { GUNS, WEAPON_KEYS } from './weapons/guns';
 import { TimeScale, ComboCounter, comboLabel } from './core/timeScale';
+import { atmosphereFor, mixAtmosphere, ZOMBIE_KINDS, type Atmosphere } from './modes/zombieTypes';
 import { TouchControls, isTouchDevice } from './input/touch';
 import { stickMoveDirection } from './input/touchMath';
+import { generateObstacles } from './world/obstacles';
+import { ARENA as WAVE_ARENA } from './modes/waveMode';
 
 async function main() {
   const app = document.getElementById('app')!;
   const touchMode = isTouchDevice();
   const overlay = createOverlay(app, touchMode);
-  const { scene, camera, renderer } = createScene(app, touchMode);
+  const { scene, camera, renderer, setAtmosphere } = createScene(app, touchMode);
+  /** Sky transition between waves: from `atmoFrom` to `atmoTo` over a few seconds. */
+  let atmoFrom: Atmosphere = atmosphereFor(1);
+  let atmoTo: Atmosphere = atmoFrom;
+  let atmoT = 1;
+  let atmoNow: Atmosphere = atmoFrom;
+  const changeAtmosphere = (to: Atmosphere) => {
+    atmoFrom = atmoNow;
+    atmoTo = to;
+    atmoT = 0;
+  };
 
   let physics: Physics;
   try {
@@ -70,8 +83,16 @@ async function main() {
     effects.clear();
     lastKnockouts = 0;
     game?.dispose();
-    game = new Game(physics, scene, count, Math.random, mode);
+    // A fresh obstacle layout every match, keeping the spawn and the Mystery Box clear.
+    const obstacles = generateObstacles(Math.random, [
+      { x: 0, z: 0, r: 3.5 },
+      { x: WAVE_ARENA.boxPosition.x, z: WAVE_ARENA.boxPosition.z, r: 2.6 },
+    ]);
+    game = new Game(physics, scene, count, Math.random, mode, obstacles);
+    const g0 = game;
+    orbit.clip = (from, to) => g0.cameraClip(from, to);
     overlay.setKillsLabel(mode === 'waves' ? 'Abates' : 'Nocautes');
+    changeAtmosphere(atmosphereFor(1));
     overlay.setKnockouts(0);
     touch?.setOwned(game.player.owned);
     overlay.hide();
@@ -162,6 +183,7 @@ async function main() {
       reload: pressed.includes('KeyR') || touchActions.includes('reload'),
       use: pressed.includes('KeyE') || touchActions.includes('use'),
       mount: pressed.includes('KeyF') || touchActions.includes('mount'),
+      jump: pressed.includes('Space') || touchActions.includes('jump'),
       aimRay: aimRay(),
     };
   }
@@ -203,6 +225,35 @@ async function main() {
         case 'waveStart':
           overlay.banner(`ONDA ${e.wave}`);
           sfx.waveStart();
+          changeAtmosphere(atmosphereFor(e.wave));
+          break;
+        case 'newZombies':
+          window.setTimeout(() => overlay.banner(`NOVO: ${e.names.join(' + ')}!`), 1600);
+          break;
+        case 'bossIncoming':
+          window.setTimeout(() => {
+            overlay.banner('O REI CHEGOU!');
+            sfx.roar(true);
+            shake = Math.max(shake, 0.6);
+          }, 1800);
+          break;
+        case 'jump':
+          sfx.jump();
+          break;
+        case 'land':
+          effects.dust(e.point, Math.min(1, e.speed / 9));
+          sfx.land(e.speed);
+          break;
+        case 'fell':
+          sfx.fall();
+          break;
+        case 'respawn':
+          overlay.banner('DE VOLTA!');
+          break;
+        case 'steedDown':
+          effects.smoke(e.point);
+          effects.wool(e.point);
+          sfx.zombieLlama();
           break;
         case 'waveCleared':
           overlay.banner(`ONDA ${e.wave} CONCLUÍDA`);
@@ -220,14 +271,18 @@ async function main() {
             if (document.pointerLockElement) document.exitPointerLock();
             touch?.hide();
             overlay.showGameOver(
-              { wave: e.wave, kills: e.kills, points: e.points },
+              { wave: e.wave, kills: e.kills, points: e.points, reason: e.reason },
               () => startGame(npcCount, 'waves'),
               () => startGame(npcCount, 'training'),
             );
           }, 1800);
           break;
         case 'zombieSpawn':
-          effects.dirt(e.point);
+          if (e.zombie !== 'cavalry') effects.dirt(e.point);
+          if (e.zombie === 'runner' && Math.random() < 0.5) sfx.screech();
+          else if (e.zombie === 'brute') sfx.roar();
+          else if (e.zombie === 'cavalry') sfx.zombieLlama();
+          else if (e.zombie === 'exploder') sfx.fuse();
           break;
         case 'corpseGone':
           effects.smoke(e.point);
@@ -302,8 +357,11 @@ async function main() {
         box: w.nearBox ? { affordable: w.points >= 950, rolling: w.boxRolling } : null,
       });
       touch?.setUse(w.nearBox && !w.over);
+      overlay.setBossBar(w.boss && w.boss.state !== 'ragdoll'
+        ? { name: ZOMBIE_KINDS.boss.name, hp: w.boss.hp, max: w.boss.maxHp } : null);
     } else {
       overlay.setWaveHud(null);
+      overlay.setBossBar(null);
       touch?.setUse(false);
     }
     if (w?.over) {
@@ -348,6 +406,11 @@ async function main() {
     }
     // Several at once (a rocket into a crowd, a chain of lightning) or a long streak: bullet time.
     if (fresh >= 2 || size >= 4) time.trigger(fresh >= 3 || size >= 5 ? 1.8 : 1.2);
+  }
+
+  /** Follow the body while it tumbles (falling into the void, knocked dead). */
+  function cameraFocus(g: Game): THREE.Vector3 {
+    return g.player.figure.mode === 'ragdoll' ? g.player.figure.pelvisPosition() : g.player.rootPosition();
   }
 
   function applyShake(dt: number) {
@@ -405,10 +468,15 @@ async function main() {
     }
 
     if (game) {
-      orbit.update(game.player.rootPosition(), elapsed, game.player.aimBlend);
+      orbit.update(cameraFocus(game), elapsed, game.player.aimBlend);
       updateHud(game);
     }
     effects.update(running ? simElapsed : 0);
+    if (atmoT < 1) {
+      atmoT = Math.min(1, atmoT + elapsed / 4);
+      atmoNow = mixAtmosphere(atmoFrom, atmoTo, atmoT * atmoT * (3 - 2 * atmoT));
+      setAtmosphere(atmoNow);
+    }
     applyShake(elapsed);
     renderer.render(scene, camera);
     requestAnimationFrame(frame);
@@ -438,12 +506,18 @@ async function main() {
           game.step(stepper.dt, input);
           handleEvents(game, game.drainEvents());
           checkCombo(game);
-          orbit.update(game.player.rootPosition(), stepper.dt, game.player.aimBlend);
+          orbit.update(cameraFocus(game), stepper.dt, game.player.aimBlend);
           effects.update(stepper.dt);
           syncTouch(game);
         }
         updateHud(game);
         renderer.render(scene, camera);
+      },
+      /** Jump the sky straight to a wave's atmosphere (screenshots). */
+      sky(wave: number) {
+        atmoNow = atmoTo = atmosphereFor(wave);
+        atmoT = 1;
+        setAtmosphere(atmoNow);
       },
       /** Advance `ticks` fixed steps with the given input overrides, then render one frame. */
       step(ticks: number, over: Partial<GameInput> = {}) {
@@ -455,7 +529,7 @@ async function main() {
           game.step(stepper.dt, input);
           handleEvents(game, game.drainEvents());
           checkCombo(game);
-          orbit.update(game.player.rootPosition(), stepper.dt, game.player.aimBlend);
+          orbit.update(cameraFocus(game), stepper.dt, game.player.aimBlend);
           effects.update(stepper.dt);
         }
         updateHud(game);

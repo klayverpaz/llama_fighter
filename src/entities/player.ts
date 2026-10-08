@@ -4,6 +4,10 @@ import { forwardKinematics, yawQuaternion } from '../figure/fk';
 import { Animator } from '../anim/animator';
 import { RIDE, RIFLE_STANCE, STANCE } from '../anim/clips';
 import { LLAMA } from './llama';
+import { PELVIS_HEIGHT } from '../figure/skeleton';
+import { pushOut, supportHeight, type Obstacle } from '../world/obstacles';
+import { onIsland } from '../world/arena';
+import { eulerToQuat } from '../anim/clip';
 import { getStrikeClip } from '../anim/strikeClips';
 import { canAttack, createAttackState, recordHit, startAttack, tickAttack, type AttackState } from '../combat/attack';
 import { STRIKES, type StrikeDef, type StrikeName } from '../combat/strikes';
@@ -31,6 +35,11 @@ export interface RifleEvents {
   dismounted: boolean;
   /** The shotgun's pump stroke started (spent shell flies out). */
   pumped: boolean;
+  jumped: boolean;
+  /** Touched down after a jump or fall (how fast, m/s). */
+  landed: number;
+  /** Went over the edge of the island. */
+  fell: boolean;
   /** One shell pushed into the shotgun's tube. */
   shellLoaded: boolean;
 }
@@ -51,6 +60,10 @@ export const PLAYER_TUNING = {
   aimRaiseRate: 14,
   /** Body follows the camera this fast while aiming. */
   aimFollowRate: 25,
+  /** Jump: take-off speed (m/s) on foot and on the llama, and gravity (snappier than real). */
+  jumpSpeed: 5.4,
+  llamaJumpSpeed: 6.2,
+  gravity: 15,
   /** The rifle stays shouldered this long after the last shot. */
   shoulderAfterShot: 0.45,
 };
@@ -72,6 +85,8 @@ export interface PlayerInput {
   reload?: boolean;
   /** Get on / off the llama this tick. */
   mount?: boolean;
+  /** Jump this tick. */
+  jump?: boolean;
 }
 
 export interface TargetInfo {
@@ -141,6 +156,15 @@ export class Player {
   gun: RigOutput | null = null;
   /** Riding the llama: rifle only, no strikes, llama speeds. */
   mounted = false;
+  /** Height of the feet above the island floor (crates, jumps, falling into the void). */
+  feetY = 0;
+  vy = 0;
+  grounded = true;
+  /** Lost over the edge: the figure is a ragdoll tumbling into the void. */
+  fellOff = false;
+  /** Solid obstacles to collide with and stand on (set by the game). */
+  obstacles: Obstacle[] = [];
+  private airBlend = 0;
   /** Ground speed last tick (drives the llama's gait). */
   speed = 0;
   /** Saddle bob from the llama's gait, set by the game each tick. */
@@ -153,14 +177,55 @@ export class Player {
     return {
       dryFire: false, reloadStarted: false, reloadFinished: false, swapped: false,
       mounted: false, dismounted: false, pumped: false, shellLoaded: false,
+      jumped: false, landed: 0, fell: false,
     };
   }
 
   /** Where the pelvis really is: raised onto the saddle while riding. */
   rootPosition(): THREE.Vector3 {
     const p = this.position.clone();
-    if (this.mounted) p.y = LLAMA.saddlePelvisY + this.rideBob;
+    p.y = PELVIS_HEIGHT + this.feetY;
+    if (this.mounted) p.y = this.feetY + LLAMA.saddlePelvisY + this.rideBob;
     return p;
+  }
+
+  /** Training mode: back on your feet in the middle of the island after falling off. */
+  respawn(): void {
+    this.figure.toPosed();
+    this.position.set(0, PELVIS_HEIGHT, 0);
+    this.feetY = 0;
+    this.vy = 0;
+    this.grounded = true;
+    this.fellOff = false;
+  }
+
+  /** Gravity, jumping, standing on crates, and falling off the island. */
+  private updateVertical(dt: number, jump: boolean): void {
+    if (jump && this.grounded) {
+      this.vy = this.mounted ? PLAYER_TUNING.llamaJumpSpeed : PLAYER_TUNING.jumpSpeed;
+      this.grounded = false;
+      this.events.jumped = true;
+    }
+    this.vy -= PLAYER_TUNING.gravity * dt;
+    const falling = this.vy;
+    this.feetY += this.vy * dt;
+    const radius = this.mounted ? 0.5 : 0.25;
+    const ground = supportHeight(this.obstacles, this.position.x, this.position.z, this.feetY, radius, onIsland(this.position.x, this.position.z));
+    if (ground !== null && this.feetY <= ground && this.vy <= 0) {
+      if (!this.grounded && falling < -3) this.events.landed = -falling;
+      this.feetY = ground;
+      this.vy = 0;
+      this.grounded = true;
+    } else {
+      this.grounded = false;
+    }
+    this.position.y = PELVIS_HEIGHT + this.feetY;
+    // Well below the island: tumble into the void as a ragdoll.
+    if (this.feetY < -1.2 && !this.fellOff) {
+      this.fellOff = true;
+      this.events.fell = true;
+      this.figure.toRagdoll();
+    }
   }
 
   private baseClip() {
@@ -230,7 +295,12 @@ export class Player {
       else speed = aiming ? PLAYER_TUNING.aimWalkSpeed : input.run ? PLAYER_TUNING.runSpeed : PLAYER_TUNING.walkSpeed;
       const next = this.position.clone().addScaledVector(input.move, speed * dt);
       if (!this.mounted && blockedByTarget(this.position, next, targets)) speed = 0;
-      else this.position.copy(next);
+      else {
+        // Walls, pillars and rocks block you (you slide along them); crates you are standing on don't.
+        const p = pushOut(this.obstacles, next.x, next.z, this.mounted ? 0.55 : 0.3, this.feetY);
+        this.position.x = p.x;
+        this.position.z = p.z;
+      }
       if (!aiming) {
         const targetYaw = Math.atan2(input.move.x, input.move.z);
         const rate = this.mounted ? LLAMA.turnRate : PLAYER_TUNING.turnRate;
@@ -241,9 +311,20 @@ export class Player {
     if (aiming) this.yaw = lerpAngle(this.yaw, input.cameraYaw, 1 - Math.exp(-PLAYER_TUNING.aimFollowRate * dt));
     this.moving = speed > 0;
     this.speed = speed;
+    this.updateVertical(dt, !!input.jump);
+    if (this.fellOff) return;
 
     // Riding: the llama walks, the rider's legs stay in the saddle pose.
-    const joints = this.animator.update(dt, this.mounted ? 0 : speed);
+    const joints = this.animator.update(dt, this.mounted || !this.grounded ? 0 : speed);
+    // In the air: knees tucked up.
+    this.airBlend += ((this.grounded ? 0 : 1) - this.airBlend) * (1 - Math.exp(-12 * dt));
+    if (this.airBlend > 0.01 && !this.mounted) {
+      const k = this.airBlend;
+      joints.hipL.slerp(eulerToQuat([-1.0, 0, 0.12]), k);
+      joints.hipR.slerp(eulerToQuat([-0.55, 0, -0.12]), k);
+      joints.kneeL.slerp(eulerToQuat([1.5, 0, 0]), k);
+      joints.kneeR.slerp(eulerToQuat([1.2, 0, 0]), k);
+    }
     const root = { position: this.rootPosition(), rotation: yawQuaternion(this.yaw) };
     const aim = aimPoint ?? this.defaultAimPoint();
 

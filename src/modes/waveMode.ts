@@ -9,9 +9,11 @@ import {
   createAntigravModel, createFreezeModel, createLlamaCannonModel, createRpgModel, createTeslaModel,
 } from '../weapons/specialModels';
 import {
-  WaveDirector, PlayerHealth, POINTS, POWERUPS, rollPowerUp, zombieStats, type PowerUpKind,
+  WaveDirector, PlayerHealth, POINTS, POWERUPS, rollPowerUp, type PowerUpKind,
 } from './waves';
 import { createMysteryBox, createPowerUpMesh } from './waveModels';
+import { pushOut, type Obstacle } from '../world/obstacles';
+import { EXPLODER, MAX_HIT, ZOMBIE_KINDS, isBossWave, kindStats, newKinds, pickZombieKind, type ZombieKind } from './zombieTypes';
 
 /** What the wave mode needs from the game (kept narrow so it can be tested through Game). */
 export interface WaveHost {
@@ -19,8 +21,11 @@ export interface WaveHost {
   readonly player: Player;
   readonly npcs: Npc[];
   readonly random: () => number;
+  readonly obstacles: Obstacle[];
   spawnZombie(position: THREE.Vector3, yaw: number, config: ZombieConfig): Npc;
   removeNpc(npc: Npc): void;
+  /** Explosion at a point: knocks zombies down and throws bodies (the player is handled by the wave mode). */
+  blastAt(point: THREE.Vector3): void;
   emit(event: WaveEvent): void;
 }
 
@@ -28,8 +33,10 @@ export type WaveEvent =
   | { kind: 'waveStart'; wave: number; zombies: number }
   | { kind: 'waveCleared'; wave: number }
   | { kind: 'hurt'; amount: number; hp: number }
-  | { kind: 'death'; wave: number; kills: number; points: number }
-  | { kind: 'zombieSpawn'; point: THREE.Vector3 }
+  | { kind: 'death'; wave: number; kills: number; points: number; reason: 'zombies' | 'void' }
+  | { kind: 'zombieSpawn'; point: THREE.Vector3; zombie: ZombieKind }
+  | { kind: 'newZombies'; names: string[] }
+  | { kind: 'bossIncoming' }
   | { kind: 'zombieKilled'; point: THREE.Vector3 }
   | { kind: 'corpseGone'; point: THREE.Vector3 }
   | { kind: 'powerUpDrop'; power: PowerUpKind; point: THREE.Vector3 }
@@ -76,6 +83,9 @@ export class WaveMode {
   private rollResult: GunName | null = null;
   private showcaseTimer = 0;
   private shown: GunName | null = null;
+  private bossPending = false;
+  /** The boss of this wave while it's alive (HUD health bar). */
+  boss: Npc | null = null;
 
   constructor(private readonly host: WaveHost) {
     host.player.limitArsenal();
@@ -122,13 +132,13 @@ export class WaveMode {
 
     this.health.update(dt);
     if (input.damage > 0) {
-      const taken = this.health.damage(input.damage);
+      // Several claws can land on the same tick; never more than one big hit's worth at once.
+      const taken = this.health.damage(Math.min(MAX_HIT, input.damage));
       if (taken > 0) this.host.emit({ kind: 'hurt', amount: taken, hp: this.health.hp });
       if (this.health.dead) {
-        this.over = true;
         const torso = player.figure.segmentPosition('torso');
         player.figure.toRagdoll({ segment: 'torso', impulse: new THREE.Vector3(0, 8, 0), point: torso });
-        this.host.emit({ kind: 'death', wave: this.wave, kills: this.kills, points: this.points });
+        this.die('zombies');
         return;
       }
     }
@@ -139,6 +149,18 @@ export class WaveMode {
     this.updatePowerUps(dt);
     this.updateBox(dt, input.use);
     if (this.instaKillLeft > 0) this.instaKillLeft = Math.max(0, this.instaKillLeft - dt);
+  }
+
+  /** Fell off the island into the void. */
+  voidDeath(): void {
+    if (this.over) return;
+    this.health.hp = 0;
+    this.die('void');
+  }
+
+  private die(reason: 'zombies' | 'void'): void {
+    this.over = true;
+    this.host.emit({ kind: 'death', wave: this.wave, kills: this.kills, points: this.points, reason });
   }
 
   /** Points for every hit, more for kills; insta-kill finishes anything that got hurt; maybe drop a power-up. */
@@ -157,10 +179,22 @@ export class WaveMode {
         this.director.onKill();
         const at = npc.figure.pelvisPosition();
         this.host.emit({ kind: 'zombieKilled', point: at });
+        if (npc.kind === 'exploder') this.bombardeiro(at.clone());
+        if (npc === this.boss) this.boss = null;
         const power = rollPowerUp(this.host.random);
         if (power) this.dropPowerUp(power, at.setY(0));
       }
       this.snapshots.set(npc, { hp: npc.hp, down });
+    }
+  }
+
+  /** A Bombardeiro went off: blast the crowd (chain reactions welcome) and hurt the player if close. */
+  private bombardeiro(at: THREE.Vector3): void {
+    this.host.blastAt(at);
+    const d = at.distanceTo(this.host.player.position);
+    if (d < EXPLODER.radius && !this.over) {
+      const taken = this.health.damage(EXPLODER.playerDamage * (1 - d / EXPLODER.radius));
+      if (taken > 0) this.host.emit({ kind: 'hurt', amount: taken, hp: this.health.hp });
     }
   }
 
@@ -182,6 +216,10 @@ export class WaveMode {
         if (player.owned.has(g)) player.reserve[g] = Math.min(RESERVE[g], player.reserve[g] + GUNS[g].magSize);
       }
       this.host.emit({ kind: 'waveStart', wave: t.started, zombies: this.director.pending });
+      const fresh = newKinds(t.started).filter((k) => k !== 'walker').map((k) => ZOMBIE_KINDS[k].plural);
+      if (fresh.length) this.host.emit({ kind: 'newZombies', names: fresh });
+      this.bossPending = isBossWave(t.started);
+      if (this.bossPending) this.host.emit({ kind: 'bossIncoming' });
     }
     if (t.cleared) this.host.emit({ kind: 'waveCleared', wave: t.cleared });
     for (let i = 0; i < t.spawn; i++) this.spawnOne();
@@ -196,10 +234,19 @@ export class WaveMode {
       angle += Math.PI;
       pos = new THREE.Vector3(Math.sin(angle) * r, PELVIS_HEIGHT, Math.cos(angle) * r);
     }
+    // Don't climb out of the ground inside a pillar or a rock.
+    const free = pushOut(this.host.obstacles, pos.x, pos.z, 0.6, 0);
+    pos.x = free.x;
+    pos.z = free.z;
     const yaw = Math.atan2(player.position.x - pos.x, player.position.z - pos.z);
-    const npc = this.host.spawnZombie(pos, yaw, zombieStats(this.wave));
+    const kind: ZombieKind = this.bossPending ? 'boss' : pickZombieKind(this.wave, random);
+    const npc = this.host.spawnZombie(pos, yaw, { ...kindStats(kind, this.wave), kind });
+    if (kind === 'boss') {
+      this.bossPending = false;
+      this.boss = npc;
+    }
     this.snapshots.set(npc, { hp: npc.hp, down: false });
-    this.host.emit({ kind: 'zombieSpawn', point: pos.clone().setY(0) });
+    this.host.emit({ kind: 'zombieSpawn', point: pos.clone().setY(0), zombie: kind });
   }
 
   private dropPowerUp(kind: PowerUpKind, at: THREE.Vector3): void {

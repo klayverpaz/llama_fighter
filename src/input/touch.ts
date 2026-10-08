@@ -3,7 +3,7 @@ import { joystickVector, STICK_RUN } from './touchMath';
 
 /** One-shot actions from on-screen buttons. */
 export type TouchWeapon = 'fists' | 'rifle' | 'shotgun' | 'rpg' | 'freeze' | 'tesla' | 'antigrav' | 'llamaCannon';
-export type TouchAction = StrikeName | 'weapon' | 'reload' | 'mount' | 'slowmo' | 'use' | `pick:${TouchWeapon}`;
+export type TouchAction = StrikeName | 'weapon' | 'reload' | 'mount' | 'slowmo' | 'use' | 'jump' | `pick:${TouchWeapon}`;
 
 const WEAPON_PICKS: Array<[TouchWeapon, string]> = [
   ['fists', 'Mãos'], ['rifle', 'AK-47'], ['shotgun', 'Escopeta'], ['rpg', 'Bazuca'],
@@ -58,6 +58,7 @@ const CSS = `
 .kb-slowmo { position: absolute; right: calc(max(14px, env(safe-area-inset-right)) + 54px); top: max(14px, env(safe-area-inset-top));
   width: 44px; height: 44px; border-radius: 10px; font-size: 18px; }
 .kb-slowmo.on { background: #2a6fdb; color: #fffdf7; }
+.kb-btn.jump { width: 64px; height: 64px; right: 12px; bottom: 206px; background: #7fbf5a; font-size: 13px; }
 .kb-btn.use { width: 72px; height: 56px; border-radius: 12px; right: 112px; bottom: 112px; background: #e8b923; font-size: 14px; }
 body.kb-touch-mode .kb-hud { display: none !important; }
 body.kb-touch-mode .kb-ammo { bottom: auto; top: max(68px, env(safe-area-inset-top)); right: max(14px, env(safe-area-inset-right)); }
@@ -157,6 +158,7 @@ export class TouchControls {
     this.weaponButton = this.button(cluster, 'weapon', 'Armas', { onDown: () => { this.picker.hidden = false; } });
     this.mountButton = this.button(cluster, 'mount', 'Lhama', { onDown: () => this.actions.push('mount') });
     this.useButton = this.button(cluster, 'use', 'Usar', { onDown: () => this.actions.push('use') });
+    this.button(cluster, 'jump', 'Pular', { onDown: () => this.actions.push('jump') });
     this.useButton.hidden = true;
 
     const pause = this.button(this.layer, 'pause kb-pause', 'II', { onDown: () => onPause() });

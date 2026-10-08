@@ -31,13 +31,15 @@ export class Llama {
   private gait = 0;
   private readonly rigidBody: RAPIER.RigidBody;
 
-  constructor(private readonly physics: Physics, scene: THREE.Scene, ownerId: string) {
-    const wool = new THREE.MeshToonMaterial({ color: 0xeee2c8 });
-    const woolDark = new THREE.MeshToonMaterial({ color: 0xd6c4a2 });
+  constructor(private readonly physics: Physics, scene: THREE.Scene, ownerId: string, style: 'normal' | 'zombie' = 'normal') {
+    const zombie = style === 'zombie';
+    const wool = new THREE.MeshToonMaterial({ color: zombie ? 0x8e9a76 : 0xeee2c8 });
+    const woolDark = new THREE.MeshToonMaterial({ color: zombie ? 0x5c6a4a : 0xd6c4a2 });
     const face = new THREE.MeshToonMaterial({ color: 0x3a2a1f });
-    const blanket = new THREE.MeshToonMaterial({ color: 0xc8372d });
-    const stripe = new THREE.MeshToonMaterial({ color: 0xf2b134 });
-    const tassel = new THREE.MeshToonMaterial({ color: 0x2a6fdb });
+    const blanket = new THREE.MeshToonMaterial({ color: zombie ? 0x5a1d1d : 0xc8372d });
+    const stripe = new THREE.MeshToonMaterial({ color: zombie ? 0x2e2e2e : 0xf2b134 });
+    const tassel = new THREE.MeshToonMaterial({ color: zombie ? 0x1f1f1f : 0x2a6fdb });
+    const eyeMat = zombie ? new THREE.MeshBasicMaterial({ color: 0xff2a1a }) : face;
 
     const capsule = (r: number, len: number, mat: THREE.Material) => new THREE.Mesh(new THREE.CapsuleGeometry(r, len, 4, 12), mat);
 
@@ -86,7 +88,7 @@ export class Llama {
       const ear = capsule(0.025, 0.12, woolDark);
       ear.position.set(side * 0.06, 0.13, -0.03);
       ear.rotation.set(-0.15, 0, side * -0.25);
-      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.018, 8, 6), face);
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(zombie ? 0.024 : 0.018, 8, 6), eyeMat);
       eye.position.set(side * 0.075, 0.03, 0.07);
       head.add(ear, eye);
     }
@@ -129,6 +131,18 @@ export class Llama {
         o.receiveShadow = true;
       }
     });
+    if (zombie) {
+      // Bony ribs showing through the rotten wool.
+      const bone = new THREE.MeshToonMaterial({ color: 0xe8e0c8 });
+      for (let i = 0; i < 4; i++) {
+        for (const side of [-1, 1]) {
+          const rib = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.16, 0.025), bone);
+          rib.position.set(side * (LLAMA.bodyRadius - 0.005), -0.06, 0.12 - i * 0.07);
+          rib.rotation.z = side * 0.25;
+          this.body.add(rib);
+        }
+      }
+    }
     this.group.visible = false;
     scene.add(this.group);
 
@@ -152,7 +166,7 @@ export class Llama {
   }
 
   /** Place the llama (ground position, heading) and animate the walk cycle for this tick. */
-  update(dt: number, ground: THREE.Vector3, yaw: number, speed: number, visible: boolean): void {
+  update(dt: number, ground: THREE.Vector3, yaw: number, speed: number, visible: boolean, lift = 0): void {
     this.group.visible = visible;
     if (!visible) {
       this.rigidBody.setNextKinematicTranslation({ x: 0, y: -50, z: 0 });
@@ -169,10 +183,10 @@ export class Llama {
     this.neck.rotation.x = -0.28 + Math.sin(this.gait * 2) * 0.05 * intensity;
     this.tail.rotation.z = Math.sin(this.gait * 0.5 + performance.now() * 0.002) * 0.2;
 
-    this.group.position.set(ground.x, 0, ground.z);
+    this.group.position.set(ground.x, lift, ground.z);
     this.group.rotation.y = yaw;
     const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
-    this.rigidBody.setNextKinematicTranslation({ x: ground.x, y: 0, z: ground.z });
+    this.rigidBody.setNextKinematicTranslation({ x: ground.x, y: lift, z: ground.z });
     this.rigidBody.setNextKinematicRotation(q);
   }
 

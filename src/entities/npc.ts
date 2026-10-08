@@ -3,7 +3,10 @@ import type { Figure } from '../figure/figure';
 import { yawFromQuaternion, yawQuaternion } from '../figure/fk';
 import { PELVIS_HEIGHT, type SegmentName } from '../figure/skeleton';
 import { Animator } from '../anim/animator';
-import { STANCE, ZOMBIE, ZOMBIE_SWIPE, ZOMBIE_SWIPE_HIT } from '../anim/clips';
+import { STANCE, ZOMBIE, ZOMBIE_RIDE, ZOMBIE_SWIPE, ZOMBIE_SWIPE_HIT } from '../anim/clips';
+import { LLAMA, type Llama } from './llama';
+import { EXPLODER, type ZombieKind } from '../modes/zombieTypes';
+import { mixColor } from '../modes/zombieTypes';
 import { FLINCH } from '../anim/strikeClips';
 import { applyDamage, impulseVector } from '../combat/damage';
 import { NPC_MAX_HP, type StrikeDef } from '../combat/strikes';
@@ -28,6 +31,8 @@ export interface ZombieConfig {
   hp: number;
   speed: number;
   damage: number;
+  /** Which kind (looks and special behaviour); plain walker when omitted. */
+  kind?: ZombieKind;
 }
 
 export const ZOMBIE_TUNING = {
@@ -52,6 +57,17 @@ export class Npc {
   riseLeft = 0;
   private attackCooldown = 0;
   private attackT: number | null = null;
+  /** Max HP at spawn (boss health bar). */
+  readonly maxHp: number;
+  /** Zombie cavalry: the zombie llama this zombie rides (removed by the game when the rider dies). */
+  steed: Llama | null = null;
+  /** Bombardeiro reached the player and blew itself up this tick. */
+  detonated = false;
+  private pulse = 0;
+  /** Getting around obstacles: time spent blocked, and a sideways detour. */
+  private stuck = 0;
+  private detourLeft = 0;
+  private detourSign = 1;
   state: NpcState = 'chase';
   yaw = 0;
   readonly position: THREE.Vector3;
@@ -68,17 +84,29 @@ export class Npc {
     this.position = position.clone();
     this.home = position.clone();
     this.zombie = zombie;
-    this.animator = new Animator(zombie ? ZOMBIE : STANCE);
+    this.animator = new Animator(zombie?.kind === 'cavalry' ? ZOMBIE_RIDE : zombie ? ZOMBIE : STANCE);
+    this.maxHp = zombie ? zombie.hp : NPC_MAX_HP;
     if (zombie) {
       this.hp = zombie.hp;
-      this.riseLeft = ZOMBIE_TUNING.riseSeconds;
+      // Cavalry gallops in; everything else climbs out of the ground.
+      this.riseLeft = zombie.kind === 'cavalry' ? 0 : ZOMBIE_TUNING.riseSeconds;
       this.attackCooldown = 0.6;
     }
   }
 
-  /** Where the pelvis is drawn: below the ground while climbing out. */
+  get kind(): ZombieKind | null {
+    return this.zombie ? this.zombie.kind ?? 'walker' : null;
+  }
+
+  /** Extra reach / stand-off for zombies on a llama (the llama's head sticks out ahead). */
+  private get mountMargin(): number {
+    return this.steed ? 0.7 : 0;
+  }
+
+  /** Where the pelvis is drawn: below the ground while climbing out, on the saddle when riding. */
   private rootPosition(): THREE.Vector3 {
     const p = this.position.clone();
+    if (this.steed) p.y = LLAMA.saddlePelvisY + this.steed.saddleBob();
     if (this.riseLeft > 0) {
       const k = this.riseLeft / ZOMBIE_TUNING.riseSeconds;
       p.y -= ZOMBIE_TUNING.riseDepth * k * k;
@@ -288,13 +316,20 @@ export class Npc {
   }
 
   /** Advance one tick. Returns the damage a zombie claw dealt to the player this tick (0 otherwise). */
-  update(dt: number, player: Vec2, others: Vec2[], margin = 0): number {
+  update(dt: number, player: Vec2, others: Vec2[], margin = 0, collide?: (p: THREE.Vector3) => void): number {
     this.timer += dt;
     let speed = 0;
     let dealt = 0;
     if (this.shockLeft > 0) {
       this.shockLeft -= dt;
       if (this.shockLeft <= 0 && this.state !== 'frozen' && this.floatLeft <= 0) this.figure.setTint(null);
+    }
+
+    // Bombardeiro: pulses orange/yellow, faster the closer it gets.
+    if (this.kind === 'exploder' && this.state !== 'ragdoll' && this.state !== 'frozen' && this.shockLeft <= 0 && this.floatLeft <= 0) {
+      const d = Math.hypot(player.x - this.position.x, player.z - this.position.z);
+      this.pulse += dt * (d < 5 ? 14 : 4);
+      this.figure.setTint(mixColor(0xe0762c, 0xffe14a, (Math.sin(this.pulse) + 1) / 2));
     }
 
     switch (this.state) {
@@ -337,6 +372,7 @@ export class Npc {
         if (this.pushback) {
           const step = Math.min(dt, this.pushback.remaining);
           this.position.addScaledVector(this.pushback.velocity, step);
+          collide?.(this.position);
           this.pushback.remaining -= step;
           if (this.pushback.remaining <= 1e-9) this.pushback = null;
         }
@@ -346,23 +382,40 @@ export class Npc {
       case 'chase':
       case 'hold': {
         if (this.zombie) {
-          const r = this.zombieTick(dt, player, margin);
+          const r = this.zombieTick(dt, player, margin + this.mountMargin);
           dealt = r.dealt;
           if (r.busy) break;
         }
-        const s = steer({ self: this.ground, player, others, state: this.moveState, margin, speed: this.zombie?.speed });
+        const s = steer({ self: this.ground, player, others, state: this.moveState, margin: margin + this.mountMargin, speed: this.zombie?.speed });
         this.moveState = s.state;
         this.state = s.state;
         const v = new THREE.Vector3(s.velocity.x, 0, s.velocity.z);
+        // Blocked by an obstacle for a moment: detour sideways around it.
+        if (this.detourLeft > 0) {
+          this.detourLeft -= dt;
+          v.applyAxisAngle(new THREE.Vector3(0, 1, 0), this.detourSign * 1.15);
+        }
         speed = v.length();
-        if (speed > 0.05) this.position.addScaledVector(v, dt);
-        else speed = 0;
+        if (speed > 0.05) {
+          const before = this.position.clone();
+          this.position.addScaledVector(v, dt);
+          collide?.(this.position);
+          const moved = this.position.distanceTo(before);
+          if (moved < speed * dt * 0.35) this.stuck += dt;
+          else this.stuck = Math.max(0, this.stuck - dt);
+          if (this.stuck > 0.3 && this.detourLeft <= 0) {
+            this.detourSign = Math.random() < 0.5 ? -1 : 1;
+            this.detourLeft = 0.9;
+            this.stuck = 0;
+          }
+        } else speed = 0;
         this.yaw = lerpAngle(this.yaw, s.yaw, 1 - Math.exp(-8 * dt));
         break;
       }
     }
 
-    const joints = this.animator.update(dt, speed);
+    if (this.steed) this.steed.update(dt, this.position, this.yaw, speed, true);
+    const joints = this.animator.update(dt, this.steed ? 0 : speed);
     this.figure.applyPose({ root: { position: this.rootPosition(), rotation: yawQuaternion(this.yaw) }, joints }, dt);
     return dealt;
   }
@@ -379,6 +432,15 @@ export class Npc {
     }
     const dist = Math.hypot(player.x - this.position.x, player.z - this.position.z);
     const reach = ZOMBIE_TUNING.reach + margin;
+    // The Bombardeiro doesn't claw: it runs up to you and blows itself up.
+    if (this.kind === 'exploder') {
+      if (dist <= EXPLODER.triggerReach + margin) {
+        this.detonated = true;
+        this.kill(new THREE.Vector3(0, 1, 0));
+        return { dealt: 0, busy: true };
+      }
+      return { dealt: 0, busy: false };
+    }
     this.attackCooldown -= dt;
     if (this.attackT === null && this.attackCooldown <= 0 && dist <= reach) {
       this.attackT = 0;

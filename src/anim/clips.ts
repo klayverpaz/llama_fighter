@@ -104,3 +104,15 @@ export const ZOMBIE_SWIPE: Clip = {
     { t: 0.75, joints: ZOMBIE_POSE },
   ],
 };
+
+/** Zombie cavalry: zombie arms reaching forward, legs around the llama. */
+export const ZOMBIE_RIDE: Clip = {
+  name: 'zombieRide',
+  duration: 1.6,
+  loop: true,
+  keyframes: [
+    { t: 0, joints: { ...ZOMBIE_POSE, hipL: RIDE_GUARD.hipL, kneeL: RIDE_GUARD.kneeL, hipR: RIDE_GUARD.hipR, kneeR: RIDE_GUARD.kneeR } },
+    { t: 0.8, joints: { ...ZOMBIE_POSE, neck: [0.1, -0.2, -0.3], shoulderL: [-1.7, 0, -0.2], hipL: RIDE_GUARD.hipL, kneeL: RIDE_GUARD.kneeL, hipR: RIDE_GUARD.hipR, kneeR: RIDE_GUARD.kneeR } },
+    { t: 1.6, joints: { ...ZOMBIE_POSE, hipL: RIDE_GUARD.hipL, kneeL: RIDE_GUARD.kneeL, hipR: RIDE_GUARD.hipR, kneeR: RIDE_GUARD.kneeR } },
+  ],
+};

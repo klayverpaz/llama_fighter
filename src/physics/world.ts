@@ -1,5 +1,6 @@
 import RAPIER from '@dimforge/rapier3d-compat';
 import type { SegmentName } from '../figure/skeleton';
+import { ARENA } from '../world/arena';
 
 export { RAPIER };
 
@@ -29,7 +30,8 @@ export async function createPhysics(dt = 1 / 60): Promise<Physics> {
 
   const ground = world.createRigidBody(RAPIER.RigidBodyDesc.fixed());
   world.createCollider(
-    RAPIER.ColliderDesc.cuboid(40, 0.5, 40).setTranslation(0, -0.5, 0).setFriction(0.9),
+    // The floating island: a disc. Anything pushed past its edge falls into the void.
+    RAPIER.ColliderDesc.cylinder(ARENA.depth / 2, ARENA.radius).setTranslation(0, -ARENA.depth / 2, 0).setFriction(0.9),
     ground,
   );
 
