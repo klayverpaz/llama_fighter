@@ -16,7 +16,21 @@ export interface FigureOptions {
   /** Pelvis center. */
   position: THREE.Vector3;
   yaw?: number;
+  /** Size multiplier for the whole body (the boss is 4×). */
+  scale?: number;
 }
+
+/** Segments hanging below each segment (detaching a segment takes its children with it). */
+const CHILDREN: Record<SegmentName, SegmentName[]> = Object.fromEntries(
+  SEGMENT_NAMES.map((n) => [n, SEGMENTS.filter((s) => s.parent === n).map((s) => s.name)]),
+) as Record<SegmentName, SegmentName[]>;
+
+/** A segment and everything below it. */
+export function subtree(segment: SegmentName): SegmentName[] {
+  return [segment, ...CHILDREN[segment].flatMap(subtree)];
+}
+
+const STUMP = new THREE.MeshToonMaterial({ color: 0x7a0c0c });
 
 export interface HitImpulse {
   segment: SegmentName;
@@ -47,19 +61,25 @@ export class Figure {
   readonly group = new THREE.Group();
   private readonly bodies = {} as Record<SegmentName, RAPIER.RigidBody>;
   private readonly meshes = {} as Record<SegmentName, THREE.Mesh>;
-  private readonly joints: RAPIER.ImpulseJoint[] = [];
+  /** The joint that holds each segment to its parent (removed while that segment is detached). */
+  private readonly joints = new Map<SegmentName, RAPIER.ImpulseJoint>();
   private rootBlend: RootBlend | null = null;
+  /** Roots of limbs that have been cut off (each takes its subtree). */
+  private readonly detached = new Set<SegmentName>();
+  private readonly stumps: THREE.Object3D[] = [];
 
   private readonly baseColor: number;
+  readonly scale: number;
 
   constructor(private readonly physics: Physics, scene: THREE.Scene, opts: FigureOptions) {
     this.id = opts.id;
     this.baseColor = opts.color;
+    const k = (this.scale = opts.scale ?? 1);
     const world = physics.world;
     const rest = forwardKinematics({
       root: { position: opts.position.clone(), rotation: yawQuaternion(opts.yaw ?? 0) },
       joints: identityJointRots(),
-    });
+    }, k);
     const material = new THREE.MeshToonMaterial({ color: opts.color });
 
     for (const seg of SEGMENTS) {
@@ -74,10 +94,10 @@ export class Figure {
       );
       body.userData = { figureId: this.id, segment: seg.name } satisfies BodyTag;
       const shape = seg.length > 0
-        ? RAPIER.ColliderDesc.capsule(seg.length / 2, seg.radius)
-        : RAPIER.ColliderDesc.ball(seg.radius);
+        ? RAPIER.ColliderDesc.capsule((seg.length / 2) * k, seg.radius * k)
+        : RAPIER.ColliderDesc.ball(seg.radius * k);
       world.createCollider(
-        shape.setMass(seg.mass)
+        shape.setMass(seg.mass * k * k * k)
           .setFriction(BODY_TUNING.friction)
           .setRestitution(BODY_TUNING.restitution)
           .setActiveHooks(RAPIER.ActiveHooks.FILTER_CONTACT_PAIRS),
@@ -86,8 +106,8 @@ export class Figure {
       this.bodies[seg.name] = body;
 
       const geometry = seg.length > 0
-        ? new THREE.CapsuleGeometry(seg.radius, seg.length, 4, 12)
-        : new THREE.SphereGeometry(seg.radius, 16, 12);
+        ? new THREE.CapsuleGeometry(seg.radius * k, seg.length * k, 4, 12)
+        : new THREE.SphereGeometry(seg.radius * k, 16, 12);
       const mesh = new THREE.Mesh(geometry, material);
       mesh.castShadow = true;
       mesh.receiveShadow = true;
@@ -97,25 +117,103 @@ export class Figure {
       this.group.add(mesh);
     }
 
-    for (const seg of SEGMENTS) {
-      if (!seg.parent || !seg.jointKind) continue;
-      const parent = this.bodies[seg.parent];
-      const child = this.bodies[seg.name];
-      const data = seg.jointKind.kind === 'revolute'
-        ? RAPIER.JointData.revolute(seg.parentAnchor, seg.selfAnchor, seg.jointKind.axis)
-        : RAPIER.JointData.spherical(seg.parentAnchor, seg.selfAnchor);
-      const created = world.createImpulseJoint(data, parent, child, true);
-      const joint = world.getImpulseJoint(created.handle);
-      joint.setContactsEnabled(false);
-      if (seg.jointKind.kind === 'revolute') {
-        (joint as RAPIER.RevoluteImpulseJoint).setLimits(seg.jointKind.limits[0], seg.jointKind.limits[1]);
-      } else {
-        setSphericalSpring(joint, seg.jointKind.springStiffness, seg.jointKind.springDamping);
-      }
-      this.joints.push(joint);
-    }
+    for (const seg of SEGMENTS) this.connect(seg.name);
 
     scene.add(this.group);
+  }
+
+  /** (Re)create the joint holding `name` to its parent. */
+  private connect(name: SegmentName): void {
+    const seg = SEGMENTS.find((s) => s.name === name)!;
+    if (!seg.parent || !seg.jointKind) return;
+    const world = this.physics.world;
+    const a1 = seg.parentAnchor.clone().multiplyScalar(this.scale);
+    const a2 = seg.selfAnchor.clone().multiplyScalar(this.scale);
+    const data = seg.jointKind.kind === 'revolute'
+      ? RAPIER.JointData.revolute(a1, a2, seg.jointKind.axis)
+      : RAPIER.JointData.spherical(a1, a2);
+    const created = world.createImpulseJoint(data, this.bodies[seg.parent], this.bodies[name], true);
+    const joint = world.getImpulseJoint(created.handle);
+    joint.setContactsEnabled(false);
+    if (seg.jointKind.kind === 'revolute') {
+      (joint as RAPIER.RevoluteImpulseJoint).setLimits(seg.jointKind.limits[0], seg.jointKind.limits[1]);
+    } else {
+      const m = this.scale ** 3;
+      setSphericalSpring(joint, seg.jointKind.springStiffness * m, seg.jointKind.springDamping * m);
+    }
+    this.joints.set(name, joint);
+  }
+
+  /** Is this segment cut off (directly, or because something above it was)? */
+  isDetached(name: SegmentName): boolean {
+    for (const root of this.detached) if (subtree(root).includes(name)) return true;
+    return false;
+  }
+
+  /** How many limbs have been cut off. */
+  get detachedCount(): number {
+    return this.detached.size;
+  }
+
+  /**
+   * Cut a limb off at its joint (head, arm, forearm, thigh, shin). The piece becomes a free physics body
+   * thrown by `impulse`; the rest of the figure keeps going (even while standing). Returns false if it
+   * was already gone or can't be cut (pelvis, torso).
+   */
+  detach(segment: SegmentName, impulse?: THREE.Vector3): boolean {
+    if (segment === 'pelvis' || segment === 'torso' || this.isDetached(segment)) return false;
+    const joint = this.joints.get(segment);
+    if (!joint) return false;
+    this.physics.world.removeImpulseJoint(joint, true);
+    this.joints.delete(segment);
+    this.detached.add(segment);
+    for (const name of subtree(segment)) {
+      const b = this.bodies[name];
+      if (b.bodyType() !== RAPIER.RigidBodyType.Dynamic) {
+        const lv = b.linvel();
+        const av = b.angvel();
+        b.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
+        b.setLinvel(lv, true);
+        b.setAngvel(av, true);
+      }
+    }
+    if (impulse) this.bodies[segment].applyImpulse(impulse, true);
+    // Red caps on both sides of the cut.
+    const seg = SEGMENTS.find((s) => s.name === segment)!;
+    const r = seg.radius * this.scale * 1.05;
+    const capOnParent = new THREE.Mesh(new THREE.SphereGeometry(r, 10, 8), STUMP);
+    capOnParent.position.copy(seg.parentAnchor).multiplyScalar(this.scale);
+    const capOnLimb = new THREE.Mesh(new THREE.SphereGeometry(r, 10, 8), STUMP);
+    capOnLimb.position.copy(seg.selfAnchor).multiplyScalar(this.scale);
+    // Undo the parent's visual bulk so the cap stays round.
+    const parentMesh = this.meshes[seg.parent!];
+    capOnParent.scale.set(1 / parentMesh.scale.x, 1 / parentMesh.scale.y, 1 / parentMesh.scale.z);
+    parentMesh.add(capOnParent);
+    this.meshes[segment].add(capOnLimb);
+    this.stumps.push(capOnParent, capOnLimb);
+    return true;
+  }
+
+  /** World position of the cut on the body side (where the blood comes out) for a detached limb. */
+  stumpPosition(segment: SegmentName): THREE.Vector3 {
+    const seg = SEGMENTS.find((s) => s.name === segment)!;
+    const parent = this.bodies[seg.parent!];
+    const r = parent.rotation();
+    const t = parent.translation();
+    return seg.parentAnchor.clone().multiplyScalar(this.scale)
+      .applyQuaternion(new THREE.Quaternion(r.x, r.y, r.z, r.w)).add(new THREE.Vector3(t.x, t.y, t.z));
+  }
+
+  /** Put every cut-off limb back (training dummies "heal" when they stand up). */
+  private reattachAll(): void {
+    if (this.detached.size === 0) return;
+    for (const root of this.detached) this.connect(root);
+    this.detached.clear();
+    for (const s of this.stumps) {
+      s.removeFromParent();
+      (s as THREE.Mesh).geometry.dispose();
+    }
+    this.stumps.length = 0;
   }
 
   /** Posed mode only: drive every kinematic body to the FK result of `pose`. */
@@ -131,8 +229,10 @@ export class Figure {
       };
       if (k >= 1) this.rootBlend = null;
     }
-    const transforms = forwardKinematics({ root, joints: pose.joints });
+    const transforms = forwardKinematics({ root, joints: pose.joints }, this.scale);
+    const free = this.detached.size > 0 ? new Set([...this.detached].flatMap(subtree)) : null;
     for (const name of SEGMENT_NAMES) {
+      if (free?.has(name)) continue;
       const t = transforms[name];
       this.bodies[name].setNextKinematicTranslation(t.position);
       this.bodies[name].setNextKinematicRotation(t.rotation);
@@ -171,6 +271,8 @@ export class Figure {
   /** Attach a decoration to a segment's mesh (it moves with that body part, also as a ragdoll). */
   attach(segment: SegmentName, object: THREE.Object3D): void {
     object.traverse((o) => { if ((o as THREE.Mesh).isMesh) o.castShadow = true; });
+    object.position.multiplyScalar(this.scale);
+    object.scale.multiplyScalar(this.scale);
     this.meshes[segment].add(object);
   }
 
@@ -181,7 +283,7 @@ export class Figure {
     for (const side of [-1, 1]) {
       const eye = new THREE.Mesh(geo, mat);
       eye.position.set(side * 0.045, 0.025, 0.102);
-      this.meshes.head.add(eye);
+      this.attach('head', eye);
     }
   }
 
@@ -198,8 +300,7 @@ export class Figure {
       crown.add(spike);
     }
     crown.position.y = 0.11;
-    crown.traverse((o) => { (o as THREE.Mesh).castShadow = true; });
-    this.meshes.head.add(crown);
+    this.attach('head', crown);
   }
 
   /** Recolour the whole figure (ice, electric flash, anti-gravity glow); null restores its own colour. */
@@ -256,6 +357,7 @@ export class Figure {
   toPosed(): void {
     if (this.mode === 'posed') return;
     this.mode = 'posed';
+    this.reattachAll();
     for (const name of SEGMENT_NAMES) {
       const b = this.bodies[name];
       b.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true);
@@ -308,7 +410,7 @@ export class Figure {
     const b = this.bodies[segment];
     const r = b.rotation();
     const t = b.translation();
-    return local.clone().applyQuaternion(new THREE.Quaternion(r.x, r.y, r.z, r.w)).add(new THREE.Vector3(t.x, t.y, t.z));
+    return local.clone().multiplyScalar(this.scale).applyQuaternion(new THREE.Quaternion(r.x, r.y, r.z, r.w)).add(new THREE.Vector3(t.x, t.y, t.z));
   }
 
   syncMeshes(): void {
@@ -323,8 +425,8 @@ export class Figure {
 
   dispose(): void {
     const world = this.physics.world;
-    for (const j of this.joints) world.removeImpulseJoint(j, true);
-    this.joints.length = 0;
+    for (const j of this.joints.values()) world.removeImpulseJoint(j, true);
+    this.joints.clear();
     for (const name of SEGMENT_NAMES) world.removeRigidBody(this.bodies[name]);
     this.group.removeFromParent();
     for (const name of SEGMENT_NAMES) this.meshes[name].geometry.dispose();

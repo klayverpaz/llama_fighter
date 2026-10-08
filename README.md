@@ -26,7 +26,9 @@ Inspirado no Call of Duty Zombies. Os zumbis saem do chão nas bordas da arena: 
 | 3 | Bombardeiro | Laranja e pulsando: explode quando morre ou quando te alcança, derrubando os zumbis em volta (reação em cadeia). |
 | 4 | Brutamontes | Roxo e parrudo, olhos azuis: aguenta muito e bate forte. |
 | 5 | Cavaleiro Zumbi | Montado numa **lhama zumbi** (lã podre, costelas à mostra, olhos vermelhos): rápido; tiro na lhama fere o cavaleiro, e ela cai quando ele morre. |
-| 5, 10, 15… | Rei Brutamontes | Chefão gigante, dourado e de coroa, com barra de vida própria. |
+| 5, 10, 15… | Rei Brutamontes | Chefão **4× maior** (cerca de 7 m), dourado e de coroa, com barra de vida própria e garras que alcançam de longe. |
+
+**Desmembramento e sangue**: cada acerto espirra sangue e deixa poças no chão. Braços e pernas acumulam dano e voam quando passam do limite — um zumbi sem braço continua vindo, sem perna cai. Tiro na cabeça que mata pode arrancá-la (com a escopeta, sempre), o high kick também. Explosões arrancam membros, o zumbi congelado estilhaça em pedaços, e corpos no chão podem ser despedaçados a tiro. O cotoco jorra sangue por alguns segundos.
 
 Nenhum golpe tira mais de 60 de vida (a vida é 100), nem do chefão. O céu escurece a cada onda: dia, entardecer, crepúsculo e, da onda 7 em diante, noite com neblina e lua de sangue.
 

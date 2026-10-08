@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { AK_POINTS } from '../weapons/akModel';
+import { onIsland } from '../world/arena';
 
 interface Particle {
   mesh: THREE.Mesh;
@@ -11,7 +12,14 @@ interface Particle {
   /** Bounces on the floor instead of passing through. */
   bounce: boolean;
   shrink: boolean;
+  /** Called once when it reaches the ground (blood drops leave a splat). */
+  onLand?: (at: THREE.Vector3) => void;
 }
+
+/** Something that keeps spurting blood for a while (a stump, a flying limb). */
+interface Bleeder { at: () => THREE.Vector3; left: number; total: number; rate: number; acc: number; up: number }
+
+interface Splat { mesh: THREE.Mesh; age: number }
 
 interface Tracer { mesh: THREE.Object3D; life: number; maxLife: number; fade?: THREE.Material[] }
 
@@ -26,6 +34,11 @@ export class Effects {
   private readonly particles: Particle[] = [];
   private readonly tracers: Tracer[] = [];
   private readonly puffs: Puff[] = [];
+  private readonly bleeders: Bleeder[] = [];
+  private readonly splats: Splat[] = [];
+  private readonly bloodGeo = new THREE.BoxGeometry(0.03, 0.03, 0.03);
+  private readonly bloodMats = [0x8a0e0e, 0xa31212, 0x6e0a0a].map((c) => new THREE.MeshBasicMaterial({ color: c }));
+  private readonly splatGeo = new THREE.CircleGeometry(1, 12);
   private readonly puffGeo = new THREE.SphereGeometry(1, 14, 10);
   private readonly shardGeo = new THREE.BoxGeometry(0.05, 0.05, 0.05);
   private readonly shardMat = new THREE.MeshBasicMaterial({ color: 0xbff0ff });
@@ -213,6 +226,59 @@ export class Effects {
     this.puff(point, 0xf3ead8, 0.1, 0.6, 0.35, 0.2, false);
   }
 
+  /** A spray of blood from a hit, mostly along `dir`. `amount` ~1 for a bullet, more for big hits. */
+  blood(point: THREE.Vector3, dir: THREE.Vector3 | null, amount = 1): void {
+    const d = dir && dir.lengthSq() > 0 ? dir.clone().normalize() : new THREE.Vector3(0, 1, 0);
+    const n = Math.round(6 + 10 * amount);
+    for (let i = 0; i < n; i++) {
+      const v = d.clone().multiplyScalar(1.5 + Math.random() * 3)
+        .add(new THREE.Vector3(Math.random() - 0.5, Math.random() * 0.8, Math.random() - 0.5).multiplyScalar(2.6));
+      this.drop(point, v, 0.6 + Math.random() * 0.5, 0.6 + Math.random() * 0.8);
+    }
+    if (point.y < 0.6) this.splat(point, 0.25 + 0.2 * amount);
+  }
+
+  /** Blood keeps pouring from `at()` for `seconds` (stumps and flying limbs). */
+  bleed(at: () => THREE.Vector3, seconds: number, rate = 40, up = 1.8): void {
+    this.bleeders.push({ at, left: seconds, total: seconds, rate, acc: 0, up });
+  }
+
+  private drop(at: THREE.Vector3, velocity: THREE.Vector3, life: number, size: number): void {
+    const m = new THREE.Mesh(this.bloodGeo, this.bloodMats[Math.floor(Math.random() * this.bloodMats.length)]);
+    m.position.copy(at);
+    m.scale.setScalar(size);
+    this.particles.push({
+      mesh: m, velocity, spin: new THREE.Vector3(), life, maxLife: life, gravity: GRAVITY, bounce: false, shrink: false,
+      onLand: (p) => { if (Math.random() < 0.35) this.splat(p, 0.08 + Math.random() * 0.14); },
+    });
+    this.scene.add(m);
+  }
+
+  /** A flat pool of blood on the ground that fades out after a while. */
+  splat(point: THREE.Vector3, size: number): void {
+    if (!onIsland(point.x, point.z)) return;
+    const mat = this.bloodMats[Math.floor(Math.random() * 3)].clone();
+    mat.transparent = true;
+    mat.opacity = 0.9;
+    mat.depthWrite = false;
+    mat.polygonOffset = true;
+    mat.polygonOffsetFactor = -2;
+    const m = new THREE.Mesh(this.splatGeo, mat);
+    m.rotation.x = -Math.PI / 2;
+    m.rotation.z = Math.random() * Math.PI;
+    m.position.set(point.x, 0.012 + this.splats.length * 0.00002, point.z);
+    m.scale.set(size * (0.8 + Math.random() * 0.5), size * (0.8 + Math.random() * 0.5), 1);
+    this.scene.add(m);
+    this.splats.push({ mesh: m, age: 0 });
+    while (this.splats.length > 180) this.removeSplat(0);
+  }
+
+  private removeSplat(i: number): void {
+    const [s] = this.splats.splice(i, 1);
+    s.mesh.removeFromParent();
+    (s.mesh.material as THREE.Material).dispose();
+  }
+
   /** Dust ring when landing from a jump (strength 0..1). */
   dust(point: THREE.Vector3, strength: number): void {
     for (let i = 0; i < 6 + Math.round(8 * strength); i++) {
@@ -253,6 +319,28 @@ export class Effects {
   }
 
   update(dt: number): void {
+    for (let i = this.bleeders.length - 1; i >= 0; i--) {
+      const b = this.bleeders[i];
+      b.left -= dt;
+      const strength = Math.max(0, b.left / b.total);
+      b.acc += dt * b.rate * (0.3 + strength);
+      const at = b.at();
+      while (b.acc >= 1) {
+        b.acc -= 1;
+        const v = new THREE.Vector3(Math.random() - 0.5, b.up * (0.6 + Math.random() * 0.8) * (0.4 + strength), Math.random() - 0.5).multiplyScalar(1.6);
+        this.drop(at, v, 0.5 + Math.random() * 0.4, 0.5 + Math.random() * 0.6);
+      }
+      if (b.left <= 0) this.bleeders.splice(i, 1);
+    }
+    for (let i = this.splats.length - 1; i >= 0; i--) {
+      const s = this.splats[i];
+      s.age += dt;
+      if (s.age > 25) {
+        const k = Math.max(0, 1 - (s.age - 25) / 5);
+        (s.mesh.material as THREE.MeshBasicMaterial).opacity = 0.9 * k;
+        if (k <= 0) this.removeSplat(i);
+      }
+    }
     for (let i = this.puffs.length - 1; i >= 0; i--) {
       const p = this.puffs[i];
       p.life -= dt;
@@ -298,8 +386,13 @@ export class Effects {
       p.mesh.rotation.x += p.spin.x * dt;
       p.mesh.rotation.y += p.spin.y * dt;
       p.mesh.rotation.z += p.spin.z * dt;
-      if (p.mesh.position.y < 0.01) {
+      if (p.mesh.position.y < 0.01 && onIsland(p.mesh.position.x, p.mesh.position.z)) {
         p.mesh.position.y = 0.01;
+        if (p.onLand) {
+          p.onLand(p.mesh.position);
+          p.onLand = undefined;
+          p.life = Math.min(p.life, 0.05);
+        }
         if (p.bounce && p.velocity.y < -0.4) {
           p.velocity.y *= -0.35;
           p.velocity.x *= 0.5;
@@ -319,6 +412,8 @@ export class Effects {
   }
 
   clear(): void {
+    this.bleeders.length = 0;
+    while (this.splats.length) this.removeSplat(0);
     for (const p of this.puffs) p.mesh.removeFromParent();
     this.puffs.length = 0;
     for (const t of this.tracers) t.mesh.removeFromParent();

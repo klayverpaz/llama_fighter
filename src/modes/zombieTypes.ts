@@ -18,6 +18,8 @@ export interface ZombieKindSpec {
   /** Visual thickness of limbs/torso (1 = normal) and head size. */
   bulk: number;
   head: number;
+  /** Whole-body size (the boss towers at 4×). */
+  scale?: number;
 }
 
 export const ZOMBIE_KINDS: Record<ZombieKind, ZombieKindSpec> = {
@@ -26,7 +28,7 @@ export const ZOMBIE_KINDS: Record<ZombieKind, ZombieKindSpec> = {
   exploder: { name: 'Bombardeiro', plural: 'BOMBARDEIROS', firstWave: 3, weight: 3, skin: 0xe0762c, eyes: 0xfff1a0, hpMul: 0.75, speedMul: 1.2, damageMul: 1, bulk: 1.25, head: 1.15 },
   brute: { name: 'Brutamontes', plural: 'BRUTAMONTES', firstWave: 4, weight: 2, skin: 0x6b4b8e, eyes: 0x7dfcff, hpMul: 3.2, speedMul: 0.75, damageMul: 1.8, bulk: 1.9, head: 1.2 },
   cavalry: { name: 'Cavaleiro Zumbi', plural: 'CAVALEIROS ZUMBIS', firstWave: 5, weight: 2, skin: 0x8a9a6a, eyes: 0xff3b2f, hpMul: 1.4, speedMul: 1, damageMul: 1.3, bulk: 1, head: 1 },
-  boss: { name: 'Rei Brutamontes', plural: 'O REI', firstWave: 5, weight: 0, skin: 0xc9a227, eyes: 0xff2020, hpMul: 14, speedMul: 0.85, damageMul: 2.6, bulk: 2.6, head: 1.45 },
+  boss: { name: 'Rei Brutamontes', plural: 'O REI', firstWave: 5, weight: 0, skin: 0xc9a227, eyes: 0xff2020, hpMul: 14, speedMul: 1.1, damageMul: 2.6, bulk: 1.7, head: 1.2, scale: 4 },
 };
 
 export const CAVALRY_SPEED = 5.2;
@@ -56,13 +58,14 @@ export function newKinds(wave: number): ZombieKind[] {
   return (Object.keys(ZOMBIE_KINDS) as ZombieKind[]).filter((k) => ZOMBIE_KINDS[k].firstWave === wave && k !== 'boss');
 }
 
-export function kindStats(kind: ZombieKind, wave: number): ZombieStats {
+export function kindStats(kind: ZombieKind, wave: number): ZombieStats & { scale?: number } {
   const base = zombieStats(wave);
   const k = ZOMBIE_KINDS[kind];
   return {
     hp: Math.round(base.hp * k.hpMul),
     speed: kind === 'cavalry' ? CAVALRY_SPEED : Math.min(6, base.speed * k.speedMul),
     damage: Math.min(MAX_HIT, Math.round(base.damage * k.damageMul)),
+    ...(k.scale ? { scale: k.scale } : {}),
   };
 }
 

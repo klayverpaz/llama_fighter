@@ -187,6 +187,18 @@ export class Sfx {
     this.tone(1200, 1800, 0.08, 0.15, 'square');
   }
 
+  /** Wet hit on flesh. */
+  splat(): void {
+    this.burst({ duration: 0.09, gain: 0.45, type: 'lowpass', freq: 1400, freqEnd: 300, rate: 0.8 });
+  }
+
+  /** A limb tearing off: crack + squelch. */
+  dismember(big = false): void {
+    this.burst({ duration: 0.05, gain: 0.9, type: 'highpass', freq: 2000 });
+    this.burst({ duration: big ? 0.6 : 0.3, gain: 0.8, type: 'lowpass', freq: 900, freqEnd: 120, rate: 0.6, delay: 0.03 });
+    this.tone(big ? 70 : 140, 40, 0.2, 0.4, 'sine', 0.02);
+  }
+
   jump(): void {
     this.burst({ duration: 0.18, gain: 0.25, type: 'bandpass', freq: 500, freqEnd: 1400, q: 1 });
   }

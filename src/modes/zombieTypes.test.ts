@@ -43,7 +43,8 @@ describe('zombie kinds', () => {
     expect(kindStats('brute', w).speed).toBeLessThan(walker.speed);
     expect(kindStats('boss', w).hp).toBeGreaterThan(walker.hp * 10);
     expect(kindStats('cavalry', w).speed).toBeGreaterThan(5);
-    expect(ZOMBIE_KINDS.boss.bulk).toBeGreaterThan(ZOMBIE_KINDS.brute.bulk);
+    expect(ZOMBIE_KINDS.boss.scale).toBe(4);
+    expect(kindStats('boss', 5).scale).toBe(4);
     // Nothing one-shots a full-health player, at any wave.
     for (const w of [1, 5, 10, 30]) for (const k of Object.keys(ZOMBIE_KINDS) as ZombieKind[]) expect(kindStats(k, w).damage).toBeLessThan(100);
   });

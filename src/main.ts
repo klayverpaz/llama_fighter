@@ -209,7 +209,7 @@ async function main() {
           if (!e.hitNpc) effects.impact(e.to, null, false);
           break;
         case 'lightning': effects.lightning(e.points); break;
-        case 'shatter': effects.shards(e.point); sfx.shatter(); overlay.hitMarker(true); break;
+        case 'shatter': effects.shards(e.point); effects.blood(e.point, null, 1.5); sfx.shatter(); overlay.hitMarker(true); break;
         case 'float': effects.sparkle(e.point, 0xc58cff); overlay.hitMarker(true); break;
         case 'smoke': effects.smoke(e.point); break;
         case 'explosion':
@@ -219,6 +219,7 @@ async function main() {
           break;
         case 'llamaBonk':
           effects.wool(e.point);
+          if (e.hitNpc) effects.blood(e.point, null, 1.5);
           sfx.bonk();
           if (e.hitNpc) overlay.hitMarker(e.knockedOut);
           break;
@@ -284,6 +285,9 @@ async function main() {
           else if (e.zombie === 'cavalry') sfx.zombieLlama();
           else if (e.zombie === 'exploder') sfx.fuse();
           break;
+        case 'zombieKilled':
+          window.setTimeout(() => effects.splat(e.point.clone().setY(0), 0.45 + Math.random() * 0.45), 600);
+          break;
         case 'corpseGone':
           effects.smoke(e.point);
           break;
@@ -320,14 +324,27 @@ async function main() {
             orbit.yaw += (Math.random() - 0.5) * 2 * spec.recoilYaw;
           }
           if (e.gun === 'shotgun') effects.tracer(e.from, e.to);
-          if (e.target !== 'none') effects.impact(e.to, e.normal, e.target === 'npc');
+          if (e.target === 'npc') {
+            effects.blood(e.to, e.dir, e.gun === 'shotgun' ? 0.5 : 1);
+            if (e.pellet === 0) sfx.splat();
+          } else if (e.target !== 'none') effects.impact(e.to, e.normal, false);
           if (e.target === 'npc' && e.result !== 'none' && e.result !== 'body') {
             overlay.hitMarker(e.result === 'killed');
             sfx.hitMarker(e.result === 'killed');
           }
           break;
         }
-        case 'melee': sfx.punch(e.knockedOut); break;
+        case 'melee':
+          sfx.punch(e.knockedOut);
+          if (e.zombie) effects.blood(e.point, e.dir, e.knockedOut ? 1.2 : 0.5);
+          break;
+        case 'dismember':
+          effects.blood(e.point, e.dir, e.big ? 4 : 2);
+          effects.bleed(e.stump, e.big ? 3 : 1.8, e.big ? 90 : 45, e.big ? 3 : 1.8);
+          effects.bleed(e.limb, 1.2, 25, 0.6);
+          sfx.dismember(e.big);
+          shake = Math.max(shake, e.big ? 0.4 : 0.12);
+          break;
         case 'dryFire': sfx.dryFire(); break;
         case 'reloadStart': sfx.reloadStart(); break;
         case 'reloadEnd': sfx.reloadEnd(); break;

@@ -50,7 +50,8 @@ export function localToWorld(t: SegmentTransform, local: Vector3): Vector3 {
   return local.clone().applyQuaternion(t.rotation).add(t.position);
 }
 
-export function forwardKinematics(pose: Pose): SegmentTransforms {
+/** Pose → world transform of every segment. `scale` sizes the whole skeleton (the boss is 4×). */
+export function forwardKinematics(pose: Pose, scale = 1): SegmentTransforms {
   const out = {} as SegmentTransforms;
   for (const seg of SEGMENTS) {
     if (seg.parent === null || seg.joint === null) {
@@ -58,9 +59,9 @@ export function forwardKinematics(pose: Pose): SegmentTransforms {
       continue;
     }
     const parent = out[seg.parent];
-    const jointWorld = seg.parentAnchor.clone().applyQuaternion(parent.rotation).add(parent.position);
+    const jointWorld = seg.parentAnchor.clone().multiplyScalar(scale).applyQuaternion(parent.rotation).add(parent.position);
     const rotation = parent.rotation.clone().multiply(pose.joints[seg.joint]);
-    const position = jointWorld.sub(seg.selfAnchor.clone().applyQuaternion(rotation));
+    const position = jointWorld.sub(seg.selfAnchor.clone().multiplyScalar(scale).applyQuaternion(rotation));
     out[seg.name] = { position, rotation };
   }
   return out;

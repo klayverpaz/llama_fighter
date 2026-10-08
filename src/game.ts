@@ -51,7 +51,9 @@ export type GameEvent =
     result: ShotResult;
     headshot: boolean;
   }
-  | { kind: 'melee'; knockedOut: boolean }
+  | { kind: 'melee'; knockedOut: boolean; point: THREE.Vector3; dir: THREE.Vector3; zombie: boolean }
+  /** A limb came off: blood pours from `stump()` and trails behind the flying piece at `limb()`. */
+  | { kind: 'dismember'; point: THREE.Vector3; dir: THREE.Vector3; stump: () => THREE.Vector3; limb: () => THREE.Vector3; big: boolean }
   | { kind: 'dryFire' }
   | { kind: 'reloadStart' }
   | { kind: 'reloadEnd' }
@@ -168,9 +170,9 @@ export class Game implements WaveHost {
     });
   }
 
-  private collideNpc = (p: THREE.Vector3) => {
+  private collideNpc = (p: THREE.Vector3, radius: number) => {
     if (this.obstacles.length === 0) return;
-    const q = pushOut(this.obstacles, p.x, p.z, 0.35, 0);
+    const q = pushOut(this.obstacles, p.x, p.z, radius, 0);
     p.x = q.x;
     p.z = q.z;
   };
@@ -217,7 +219,8 @@ export class Game implements WaveHost {
     const spec = ZOMBIE_KINDS[config.kind ?? 'walker'];
     // Every zombie a slightly different shade so a horde doesn't look cloned.
     const color = config.kind ? mixColor(spec.skin, this.random() < 0.5 ? 0x2b2620 : 0xf3eee2, this.random() * 0.22) : ZOMBIE_COLOR;
-    const figure = new Figure(this.physics, this.scene, { id, color, position, yaw });
+    const scale = config.scale ?? 1;
+    const figure = new Figure(this.physics, this.scene, { id, color, position: position.clone().setY(position.y * scale), yaw, scale });
     figure.setBulk(spec.bulk, spec.head);
     figure.addEyes(spec.eyes);
     if (config.kind === 'boss') figure.addCrown();
@@ -319,7 +322,10 @@ export class Game implements WaveHost {
         const knockedOut = npc.takeHit(active.strike, this.player.yaw, hit.segment, hit.point);
         if (wasFrozen) this.events.push({ kind: 'shatter', point: hit.point });
         if (knockedOut) this.knockouts++;
-        this.events.push({ kind: 'melee', knockedOut });
+        this.events.push({
+          kind: 'melee', knockedOut, point: hit.point.clone(),
+          dir: new THREE.Vector3(Math.sin(this.player.yaw), 0.2, Math.cos(this.player.yaw)), zombie: !!npc.zombie,
+        });
       }
     }
 
@@ -328,6 +334,7 @@ export class Game implements WaveHost {
     this.updateLlamaProps(dt);
     this.waves?.update(dt, { use: !!input.use, damage: clawDamage });
 
+    this.collectGore();
     this.player.figure.syncMeshes();
     for (const npc of this.npcs) npc.figure.syncMeshes();
     this.syncRifle();
@@ -385,9 +392,29 @@ export class Game implements WaveHost {
         damage: spec.damage(tag.segment, hit.timeOfImpact),
         koImpulse: spec.koImpulse,
         ragdollImpulse: spec.ragdollImpulse,
+        // Buckshot to the head always takes it off.
+        decapChance: gun === 'shotgun' ? 1 : 0.55,
       });
       if (result === 'killed') this.knockouts++;
       this.events.push({ ...shot, to, normal, target: 'npc', result, headshot: tag.segment === 'head' });
+    }
+  }
+
+  /** Turn limbs that came off this tick into blood events. */
+  private collectGore(): void {
+    for (const npc of this.npcs) {
+      for (const g of npc.consumeGore()) {
+        const figure = npc.figure;
+        const segment = g.segment;
+        this.events.push({
+          kind: 'dismember',
+          point: figure.stumpPosition(segment),
+          dir: g.dir,
+          stump: () => figure.stumpPosition(segment),
+          limb: () => figure.segmentPosition(segment),
+          big: npc.scale > 1,
+        });
+      }
     }
   }
 
@@ -513,7 +540,7 @@ export class Game implements WaveHost {
       if (d >= SPECIAL.blastRadius) continue;
       const k = 1 - d / SPECIAL.blastRadius;
       const dir = npc.figure.segmentPosition('torso').sub(point);
-      if (npc.explode(k, dir)) knockouts++;
+      if (npc.explode(k, dir, this.random)) knockouts++;
       npc.figure.blast(point, SPECIAL.blastRadius, SPECIAL.blastSpeed);
     }
     for (const prop of this.llamaProps) {
@@ -533,7 +560,7 @@ export class Game implements WaveHost {
     const dir = p.velocity.clone().normalize();
     if (hit?.npc && hit.segment) {
       const result = hit.npc.takeShot(hit.segment, dir, at, {
-        damage: SPECIAL.llamaDamage, koImpulse: SPECIAL.llamaImpulse, ragdollImpulse: SPECIAL.llamaImpulse * 0.6,
+        damage: SPECIAL.llamaDamage, koImpulse: SPECIAL.llamaImpulse, ragdollImpulse: SPECIAL.llamaImpulse * 0.6, decapChance: 0.4,
       });
       knockedOut = result === 'killed';
       if (knockedOut) this.knockouts++;
