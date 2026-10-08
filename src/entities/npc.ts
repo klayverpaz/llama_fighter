@@ -5,8 +5,7 @@ import { PELVIS_HEIGHT, type SegmentName } from '../figure/skeleton';
 import { Animator } from '../anim/animator';
 import { STANCE, ZOMBIE, ZOMBIE_RIDE, ZOMBIE_SWIPE, ZOMBIE_SWIPE_HIT } from '../anim/clips';
 import { LLAMA, type Llama } from './llama';
-import { EXPLODER, type ZombieKind } from '../modes/zombieTypes';
-import { mixColor } from '../modes/zombieTypes';
+import type { ZombieKind } from '../modes/zombieTypes';
 import { FLINCH } from '../anim/strikeClips';
 import { applyDamage, impulseVector } from '../combat/damage';
 import { NPC_MAX_HP, type StrikeDef } from '../combat/strikes';
@@ -75,9 +74,6 @@ export class Npc {
   readonly maxHp: number;
   /** Zombie cavalry: the zombie llama this zombie rides (removed by the game when the rider dies). */
   steed: Llama | null = null;
-  /** Bombardeiro reached the player and blew itself up this tick. */
-  detonated = false;
-  private pulse = 0;
   /** Getting around obstacles: time spent blocked, and a sideways detour. */
   private stuck = 0;
   private detourLeft = 0;
@@ -407,13 +403,6 @@ export class Npc {
       if (this.shockLeft <= 0 && this.state !== 'frozen' && this.floatLeft <= 0) this.figure.setTint(null);
     }
 
-    // Bombardeiro: pulses orange/yellow, faster the closer it gets.
-    if (this.kind === 'exploder' && this.state !== 'ragdoll' && this.state !== 'frozen' && this.shockLeft <= 0 && this.floatLeft <= 0) {
-      const d = Math.hypot(player.x - this.position.x, player.z - this.position.z);
-      this.pulse += dt * (d < 5 ? 14 : 4);
-      this.figure.setTint(mixColor(0xe0762c, 0xffe14a, (Math.sin(this.pulse) + 1) / 2));
-    }
-
     switch (this.state) {
       case 'frozen': {
         // Solid ice: the kinematic body keeps its last pose until it thaws.
@@ -515,15 +504,6 @@ export class Npc {
     }
     const dist = Math.hypot(player.x - this.position.x, player.z - this.position.z);
     const reach = ZOMBIE_TUNING.reach * (this.scale > 1 ? this.scale * 0.8 : 1) + margin;
-    // The Bombardeiro doesn't claw: it runs up to you and blows itself up.
-    if (this.kind === 'exploder') {
-      if (dist <= EXPLODER.triggerReach + margin) {
-        this.detonated = true;
-        this.kill(new THREE.Vector3(0, 1, 0));
-        return { dealt: 0, busy: true };
-      }
-      return { dealt: 0, busy: false };
-    }
     this.attackCooldown -= dt;
     if (this.attackT === null && this.attackCooldown <= 0 && dist <= reach) {
       this.attackT = 0;

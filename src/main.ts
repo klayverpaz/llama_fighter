@@ -12,11 +12,12 @@ import { parseNpcCount } from './ui/params';
 import { Effects } from './fx/effects';
 import { Sfx } from './audio/sfx';
 import { GUNS, WEAPON_KEYS } from './weapons/guns';
-import { TimeScale, ComboCounter, comboLabel } from './core/timeScale';
+import { ComboCounter, comboLabel } from './core/combo';
 import { atmosphereFor, mixAtmosphere, ZOMBIE_KINDS, type Atmosphere } from './modes/zombieTypes';
 import { TouchControls, isTouchDevice } from './input/touch';
 import { stickMoveDirection } from './input/touchMath';
 import { generateObstacles } from './world/obstacles';
+import { detectInstallPlatform, installSteps } from './pwa/installHelp';
 import { ARENA as WAVE_ARENA } from './modes/waveMode';
 
 async function main() {
@@ -51,12 +52,10 @@ async function main() {
   const stepper = createFixedStepper(1 / 60);
   const effects = new Effects(scene);
   const sfx = new Sfx();
-  const time = new TimeScale();
   const combo = new ComboCounter();
   /** Game time (scaled), for combo windows. */
   let gameTime = 0;
   let shake = 0;
-  let wasSlow = false;
   let lastKnockouts = 0;
 
   let game: Game | null = null;
@@ -141,6 +140,7 @@ async function main() {
   };
   renderer.domElement.addEventListener('click', () => { if (game && !touch) mouse.requestLock(); });
 
+  setupInstall(() => overlay.showStart(npcCount, startGame));
   overlay.showStart(npcCount, startGame);
 
   function aimRay() {
@@ -158,7 +158,6 @@ async function main() {
       ...pressed.map((c) => KEY_TO_STRIKE[c]).filter((s): s is StrikeName => !!s),
       ...touchActions.filter((a): a is StrikeName => a in KEY_TO_STRIKE_NAMES),
     ];
-    if (pressed.includes('KeyT') || touchActions.includes('slowmo')) time.toggle();
     let weapon: GameInput['weapon'] = pressed.includes('KeyQ') || touchActions.includes('weapon') ? 'toggle' : undefined;
     WEAPON_KEYS.forEach((w, i) => { if (pressed.includes(`Digit${i + 1}`)) weapon = w; });
     const pick = touchActions.find((a) => a.startsWith('pick:'));
@@ -267,7 +266,6 @@ async function main() {
           break;
         case 'death':
           sfx.gameOver();
-          time.trigger(2.5);
           window.setTimeout(() => {
             if (document.pointerLockElement) document.exitPointerLock();
             touch?.hide();
@@ -283,7 +281,6 @@ async function main() {
           if (e.zombie === 'runner' && Math.random() < 0.5) sfx.screech();
           else if (e.zombie === 'brute') sfx.roar();
           else if (e.zombie === 'cavalry') sfx.zombieLlama();
-          else if (e.zombie === 'exploder') sfx.fuse();
           break;
         case 'zombieKilled':
           window.setTimeout(() => effects.splat(e.point.clone().setY(0), 0.45 + Math.random() * 0.45), 600);
@@ -299,7 +296,6 @@ async function main() {
           sfx.powerUp(e.power);
           if (e.power === 'nuke') {
             shake = 1;
-            time.trigger(1.5);
             effects.explosion(g.player.position.clone().add(new THREE.Vector3(0, 6, 0)));
           }
           break;
@@ -391,7 +387,7 @@ async function main() {
       overlay.setWeaponHint(p.weapon === 'fists'
         ? (g.waves
           ? (touch ? 'Toque em Armas para sacar a AK · Caixa Misteriosa dá armas novas' : 'Clique ou Q saca a AK · E na Caixa Misteriosa ($950) dá armas novas')
-          : (touch ? 'Toque em Armas para escolher uma de 7 armas · ⏱ câmera lenta' : 'Clique ou Q saca a arma · 1–8 escolhem · T câmera lenta · F lhama'))
+          : (touch ? 'Toque em Armas para escolher uma de 7 armas' : 'Clique ou Q saca a arma · 1–8 escolhem · F lhama'))
         : null);
       return;
     }
@@ -409,7 +405,39 @@ async function main() {
     });
   }
 
-  /** New knockouts this tick feed the combo counter; big moments trigger slow motion and a banner. */
+  /**
+   * "📲 Instalar app" on the start screen. Chrome on Android hands us its install prompt
+   * (beforeinstallprompt); everywhere else the button shows the right steps for that phone.
+   */
+  function setupInstall(backToStart: () => void): void {
+    const standalone = window.matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches
+      || (navigator as Navigator & { standalone?: boolean }).standalone === true;
+    const platform = detectInstallPlatform(navigator.userAgent, standalone);
+    if (platform === 'installed') return;
+    let prompt: (Event & { prompt(): Promise<void>; userChoice: Promise<{ outcome: string }> }) | null = null;
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      prompt = e as typeof prompt;
+    });
+    window.addEventListener('appinstalled', () => {
+      overlay.setInstall(null);
+      showToast('Instalado! Procure o ícone Kickboxing na tela inicial.');
+      if (!game) backToStart();
+    });
+    overlay.setInstall(async () => {
+      if (prompt) {
+        const p = prompt;
+        prompt = null;
+        await p.prompt();
+        const choice = await p.userChoice;
+        if (choice.outcome !== 'accepted') overlay.showInstallHelp(installSteps(platform, false), backToStart);
+        return;
+      }
+      overlay.showInstallHelp(installSteps(platform, false), backToStart);
+    });
+  }
+
+  /** New knockouts this tick feed the combo counter; combos get a banner. */
   function checkCombo(g: Game) {
     const total = g.waves ? g.waves.kills : g.knockouts;
     const fresh = total - lastKnockouts;
@@ -421,8 +449,6 @@ async function main() {
       overlay.banner(label);
       sfx.combo(size);
     }
-    // Several at once (a rocket into a crowd, a chain of lightning) or a long streak: bullet time.
-    if (fresh >= 2 || size >= 4) time.trigger(fresh >= 3 || size >= 5 ? 1.8 : 1.2);
   }
 
   /** Follow the body while it tumbles (falling into the void, knocked dead). */
@@ -438,7 +464,22 @@ async function main() {
   }
 
   let last = -1;
+  /**
+   * One rendered frame. An exception must never stop the loop (that is what a frozen game looks like):
+   * it is logged once and the next frame is scheduled anyway.
+   */
+  let reportedError = false;
   function frame(now: number) {
+    try {
+      tick(now);
+    } catch (err) {
+      if (!reportedError) console.error('[kickboxing] erro num quadro (o jogo continua):', err);
+      reportedError = true;
+    }
+    requestAnimationFrame(frame);
+  }
+
+  function tick(now: number) {
     const elapsed = last < 0 ? 0 : (now - last) / 1000;
     last = now;
     const { dx, dy } = mouse.consume();
@@ -449,15 +490,6 @@ async function main() {
     }
 
     const running = !!game && (touch ? !touchPaused : mouse.locked);
-    time.update(running ? elapsed : 0);
-    if (time.slow !== wasSlow) {
-      wasSlow = time.slow;
-      overlay.setSlowMo(time.slow);
-      touch?.setSlowMo(time.slow);
-      sfx.setSlowMo(time.slow);
-      sfx.slowMoWhoosh(time.slow);
-    }
-    const simElapsed = elapsed * time.scale;
     if (game?.waves && running && !game.waves.over) {
       groanTimer -= elapsed;
       const alive = game.npcs.filter((n) => n.standing).length;
@@ -469,7 +501,7 @@ async function main() {
     if (game && running) {
       const g = game;
       let restart = false;
-      stepper.advance(simElapsed, () => {
+      stepper.advance(elapsed, () => {
         gameTime += stepper.dt;
         if (restart) return;
         const input = readInput();
@@ -488,7 +520,7 @@ async function main() {
       orbit.update(cameraFocus(game), elapsed, game.player.aimBlend);
       updateHud(game);
     }
-    effects.update(running ? simElapsed : 0);
+    effects.update(running ? elapsed : 0);
     if (atmoT < 1) {
       atmoT = Math.min(1, atmoT + elapsed / 4);
       atmoNow = mixAtmosphere(atmoFrom, atmoTo, atmoT * atmoT * (3 - 2 * atmoT));
@@ -496,7 +528,6 @@ async function main() {
     }
     applyShake(elapsed);
     renderer.render(scene, camera);
-    requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
 
@@ -555,6 +586,37 @@ async function main() {
     };
   }
 }
+
+/**
+ * Offline support: the service worker caches the whole game on the first visit (production builds only).
+ * The first time that finishes, a short notice tells the player it can now run without internet.
+ */
+function registerOffline(): void {
+  if (!import.meta.env.PROD || !('serviceWorker' in navigator)) return;
+  window.addEventListener('load', () => {
+    const firstInstall = !navigator.serviceWorker.controller;
+    navigator.serviceWorker.register('./sw.js').then((reg) => {
+      const worker = reg.installing;
+      if (!worker || !firstInstall) return;
+      worker.addEventListener('statechange', () => {
+        if (worker.state === 'activated') showToast('Jogo salvo no aparelho ✓ Toque em 📲 Instalar app para criar o ícone');
+      });
+    }).catch((err) => console.warn('[kickboxing] service worker:', err));
+  });
+}
+
+function showToast(text: string): void {
+  const el = document.createElement('div');
+  el.textContent = text;
+  el.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:50;padding:10px 16px;'
+    + 'border-radius:10px;background:#2b2620;color:#fffdf7;font:700 15px ui-sans-serif,system-ui;box-shadow:0 4px 0 #000;'
+    + 'transition:opacity .5s;pointer-events:none';
+  document.body.appendChild(el);
+  setTimeout(() => { el.style.opacity = '0'; }, 3500);
+  setTimeout(() => el.remove(), 4200);
+}
+
+registerOffline();
 
 main().catch((err) => {
   console.error(err);

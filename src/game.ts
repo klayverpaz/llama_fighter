@@ -232,7 +232,7 @@ export class Game implements WaveHost {
     return npc;
   }
 
-  /** Rocket-sized blast at a point (Bombardeiro zombies). */
+  /** Rocket-sized blast at a point. */
   blastAt(point: THREE.Vector3): void {
     this.explode(point);
   }

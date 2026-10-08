@@ -59,7 +59,9 @@ export class Figure {
   readonly id: string;
   mode: FigureMode = 'posed';
   readonly group = new THREE.Group();
-  private readonly bodies = {} as Record<SegmentName, RAPIER.RigidBody>;
+  private bodies = {} as Record<SegmentName, RAPIER.RigidBody>;
+  /** Removed from the world: bodies are replaced by frozen stand-ins (see ghostBody). */
+  private disposed = false;
   private readonly meshes = {} as Record<SegmentName, THREE.Mesh>;
   /** The joint that holds each segment to its parent (removed while that segment is detached). */
   private readonly joints = new Map<SegmentName, RAPIER.ImpulseJoint>();
@@ -124,6 +126,7 @@ export class Figure {
 
   /** (Re)create the joint holding `name` to its parent. */
   private connect(name: SegmentName): void {
+    if (this.disposed) return;
     const seg = SEGMENTS.find((s) => s.name === name)!;
     if (!seg.parent || !seg.jointKind) return;
     const world = this.physics.world;
@@ -423,13 +426,53 @@ export class Figure {
     }
   }
 
+  /**
+   * Remove from the world. Anything that still holds on to this figure afterwards (a blood fountain on a stump,
+   * a late event) reads the last known positions: touching a removed Rapier body panics the whole WASM module,
+   * which freezes the game for good.
+   */
   dispose(): void {
+    if (this.disposed) return;
     const world = this.physics.world;
     for (const j of this.joints.values()) world.removeImpulseJoint(j, true);
     this.joints.clear();
-    for (const name of SEGMENT_NAMES) world.removeRigidBody(this.bodies[name]);
+    const ghosts = {} as Record<SegmentName, RAPIER.RigidBody>;
+    for (const name of SEGMENT_NAMES) {
+      const b = this.bodies[name];
+      ghosts[name] = ghostBody(b.translation(), b.rotation(), b.mass());
+      world.removeRigidBody(b);
+    }
+    this.bodies = ghosts;
+    this.disposed = true;
     this.group.removeFromParent();
     for (const name of SEGMENT_NAMES) this.meshes[name].geometry.dispose();
     (this.meshes.pelvis.material as THREE.Material).dispose();
   }
+}
+
+/**
+ * A stand-in for a removed rigid body: reports where the body was and ignores every command.
+ * Only the members the Figure uses are implemented.
+ */
+function ghostBody(t: { x: number; y: number; z: number }, r: { x: number; y: number; z: number; w: number }, mass: number): RAPIER.RigidBody {
+  const position = { x: t.x, y: t.y, z: t.z };
+  const rotation = { x: r.x, y: r.y, z: r.z, w: r.w };
+  const zero = () => ({ x: 0, y: 0, z: 0 });
+  const noop = () => {};
+  return {
+    translation: () => ({ ...position }),
+    rotation: () => ({ ...rotation }),
+    linvel: zero,
+    angvel: zero,
+    mass: () => mass,
+    bodyType: () => RAPIER.RigidBodyType.Fixed,
+    setNextKinematicTranslation: noop,
+    setNextKinematicRotation: noop,
+    setBodyType: noop,
+    setLinvel: noop,
+    setAngvel: noop,
+    applyImpulse: noop,
+    applyImpulseAtPoint: noop,
+    setGravityScale: noop,
+  } as unknown as RAPIER.RigidBody;
 }

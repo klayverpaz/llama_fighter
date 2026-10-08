@@ -12,10 +12,7 @@ export class Sfx {
       this.master = this.ctx.createGain();
       this.master.gain.value = 0.35;
       const comp = this.ctx.createDynamicsCompressor();
-      this.slowFilter = this.ctx.createBiquadFilter();
-      this.slowFilter.type = 'lowpass';
-      this.slowFilter.frequency.value = 20000;
-      this.master.connect(this.slowFilter).connect(comp).connect(this.ctx.destination);
+      this.master.connect(comp).connect(this.ctx.destination);
       const len = Math.floor(this.ctx.sampleRate * 0.6);
       this.noise = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
       const data = this.noise.getChannelData(0);
@@ -24,13 +21,6 @@ export class Sfx {
     if (this.ctx.state === 'suspended') void this.ctx.resume();
   }
 
-  private slowFilter: BiquadFilterNode | null = null;
-
-  /** Muffle everything while in slow motion. */
-  setSlowMo(on: boolean): void {
-    if (!this.ctx || !this.slowFilter) return;
-    this.slowFilter.frequency.setTargetAtTime(on ? 900 : 20000, this.ctx.currentTime, 0.12);
-  }
 
   private ready(): { ctx: AudioContext; out: GainNode; noise: AudioBuffer } | null {
     if (!this.ctx || !this.master || !this.noise || this.ctx.state !== 'running') return null;
@@ -142,11 +132,6 @@ export class Sfx {
     this.tone(630, 210, 0.3, 0.2, 'triangle', 0.02);
   }
 
-  slowMoWhoosh(entering: boolean): void {
-    this.tone(entering ? 600 : 120, entering ? 90 : 700, 0.6, 0.35, 'sine');
-    this.burst({ duration: 0.6, gain: 0.3, type: 'bandpass', freq: entering ? 1500 : 300, freqEnd: entering ? 200 : 1600, q: 0.8 });
-  }
-
   combo(level: number): void {
     const base = 520 + level * 80;
     this.tone(base, base * 1.5, 0.12, 0.3, 'square');
@@ -179,12 +164,6 @@ export class Sfx {
     this.tone(260, 140, 0.5, 0.35, 'sawtooth');
     this.tone(150, 90, 0.6, 0.3, 'sawtooth', 0.35);
     this.burst({ duration: 0.8, gain: 0.2, type: 'bandpass', freq: 500, q: 6, delay: 0.1 });
-  }
-
-  /** Bombardeiro fuse. */
-  fuse(): void {
-    this.burst({ duration: 0.5, gain: 0.25, type: 'highpass', freq: 4000 });
-    this.tone(1200, 1800, 0.08, 0.15, 'square');
   }
 
   /** Wet hit on flesh. */

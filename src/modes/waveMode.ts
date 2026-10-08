@@ -13,7 +13,7 @@ import {
 } from './waves';
 import { createMysteryBox, createPowerUpMesh } from './waveModels';
 import { pushOut, type Obstacle } from '../world/obstacles';
-import { EXPLODER, MAX_HIT, ZOMBIE_KINDS, isBossWave, kindStats, newKinds, pickZombieKind, type ZombieKind } from './zombieTypes';
+import { MAX_HIT, ZOMBIE_KINDS, isBossWave, kindStats, newKinds, pickZombieKind, type ZombieKind } from './zombieTypes';
 
 /** What the wave mode needs from the game (kept narrow so it can be tested through Game). */
 export interface WaveHost {
@@ -179,22 +179,11 @@ export class WaveMode {
         this.director.onKill();
         const at = npc.figure.pelvisPosition();
         this.host.emit({ kind: 'zombieKilled', point: at });
-        if (npc.kind === 'exploder') this.bombardeiro(at.clone());
         if (npc === this.boss) this.boss = null;
         const power = rollPowerUp(this.host.random);
         if (power) this.dropPowerUp(power, at.setY(0));
       }
       this.snapshots.set(npc, { hp: npc.hp, down });
-    }
-  }
-
-  /** A Bombardeiro went off: blast the crowd (chain reactions welcome) and hurt the player if close. */
-  private bombardeiro(at: THREE.Vector3): void {
-    this.host.blastAt(at);
-    const d = at.distanceTo(this.host.player.position);
-    if (d < EXPLODER.radius && !this.over) {
-      const taken = this.health.damage(EXPLODER.playerDamage * (1 - d / EXPLODER.radius));
-      if (taken > 0) this.host.emit({ kind: 'hurt', amount: taken, hp: this.health.hp });
     }
   }
 

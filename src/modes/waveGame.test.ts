@@ -80,7 +80,7 @@ describe('zombie waves', () => {
   });
 
   it('caps at 40 zombies a wave and 24 on the field', async () => {
-    // A constant low roll always picks plain walkers (no Bombardeiros blowing up the crowd mid-count).
+    // A constant low roll always picks plain walkers.
     const game = await waveGame(() => 0.01);
     game.waves!.director.wave = 9;
     let peak = 0;

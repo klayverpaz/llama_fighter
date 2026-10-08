@@ -16,6 +16,10 @@ export interface WaveHud {
 
 export interface Overlay {
   showStart(defaultCount: number, onStart: (count: number, mode: 'training' | 'waves') => void): void;
+  /** "📲 Instalar app" button on the start screen (null hides it). */
+  setInstall(onInstall: (() => void) | null): void;
+  /** Card with install instructions and a back button. */
+  showInstallHelp(stepsHtml: string, onBack: () => void): void;
   showPaused(onResume: () => void, onRestart?: () => void): void;
   hide(): void;
   setKnockouts(n: number): void;
@@ -27,8 +31,6 @@ export interface Overlay {
   setWeaponHint(text: string | null): void;
   /** Big centred combo text that pops and fades. */
   banner(text: string): void;
-  /** Slow-motion vignette and label. */
-  setSlowMo(on: boolean): void;
   /** Zombie-mode HUD; null hides it (training). */
   setWaveHud(hud: WaveHud | null): void;
   /** Red flash when the player is hit. */
@@ -85,9 +87,6 @@ const CSS = `
   12% { opacity: 1; transform: translate(-50%, -50%) scale(1.15) rotate(2deg); }
   25% { transform: translate(-50%, -50%) scale(1) rotate(0deg); }
   80% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -60%) scale(1); } }
-.kb-slow { position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity 0.25s;
-  box-shadow: inset 0 0 160px 40px rgba(42, 111, 219, 0.45); }
-.kb-slow.on { opacity: 1; }
 .kb-wave { position: absolute; left: 50%; top: max(12px, env(safe-area-inset-top)); transform: translateX(-50%); pointer-events: none;
   text-align: center; color: #fffdf7; text-shadow: 2px 2px 0 #2b2620; }
 .kb-wave[hidden] { display: none; }
@@ -114,8 +113,7 @@ const CSS = `
 body.kb-waves .kb-hud { display: none; }
 .kb-card .kb-mode { display: block; width: 100%; margin-top: 12px; }
 .kb-card .kb-mode.zombie { background: #4f7a32; font-size: 20px; }
-.kb-slow span { position: absolute; left: 50%; bottom: 72px; transform: translateX(-50%); font: 800 14px ui-sans-serif, system-ui;
-  letter-spacing: 0.3em; color: #fffdf7; background: rgba(42, 111, 219, 0.8); padding: 4px 10px; border-radius: 6px; }
+
 .kb-ammo .n { font-size: 26px; font-variant-numeric: tabular-nums; }
 .kb-ammo .lbl { font-size: 12px; letter-spacing: 0.08em; color: #5c554b; }
 .kb-ammo .low { color: #c0392b; }
@@ -126,7 +124,7 @@ const TOUCH_CONTROLS = [
   'Arraste o lado direito para girar a câmera',
   'Botões de golpe · AK saca a arma',
   'Com a AK: FOGO atira (arraste para mirar) · MIRA alterna a mira',
-  'Armas abre o seletor (8 armas) · Lhama monta/desce · ⏱ câmera lenta',
+  'Armas abre o seletor (8 armas) · Lhama monta/desce',
   'II pausa · Jogue com o celular deitado',
 ];
 
@@ -135,7 +133,7 @@ const CONTROLS = [
   'J jab · K direto · U cruzado esq · I cruzado dir',
   'N low kick · M chute frontal · , high kick',
   'Q / roda do mouse troca arma · 1 mãos 2 AK 3 escopeta 4 bazuca',
-  '5 congelante 6 tesla 7 antigravidade 8 lança-lhamas · T câmera lenta',
+  '5 congelante 6 tesla 7 antigravidade 8 lança-lhamas',
   'Botão dir. mirar · Botão esq. atirar · R recarregar',
   'F montar/descer da lhama (montado: só armas)',
   'E usar a Caixa Misteriosa (modo zumbi) · Backspace reiniciar · Esc pausar',
@@ -184,9 +182,6 @@ export function createOverlay(root: HTMLElement, touch = false): Overlay {
 
   const bannerEl = document.createElement('div');
   bannerEl.className = 'kb-banner';
-  const slow = document.createElement('div');
-  slow.className = 'kb-slow';
-  slow.innerHTML = '<span>CÂMERA LENTA</span>';
 
   const blood = document.createElement('div');
   blood.className = 'kb-blood';
@@ -205,6 +200,7 @@ export function createOverlay(root: HTMLElement, touch = false): Overlay {
   prompt.className = 'kb-prompt';
   prompt.hidden = true;
   let killsLabel = 'Nocautes';
+  let onInstall: (() => void) | null = null;
   let lastWave = '';
 
   const bossEl = document.createElement('div');
@@ -214,7 +210,7 @@ export function createOverlay(root: HTMLElement, touch = false): Overlay {
   const bossName = bossEl.querySelector('.name') as HTMLElement;
   const bossBar = bossEl.querySelector('.bar i') as HTMLElement;
 
-  root.append(slow, blood, overlay, hud, ko, cross, hit, ammo, hint, bannerEl, wave, points, health, prompt, bossEl);
+  root.append(blood, overlay, hud, ko, cross, hit, ammo, hint, bannerEl, wave, points, health, prompt, bossEl);
 
   function show(html: string): HTMLElement {
     card.innerHTML = html;
@@ -231,13 +227,26 @@ export function createOverlay(root: HTMLElement, touch = false): Overlay {
         <label for="kb-count">Treino livre — quantos bonecos? (${NPC_COUNT_MIN} a ${NPC_COUNT_MAX})</label>
         <input id="kb-count" type="number" min="${NPC_COUNT_MIN}" max="${NPC_COUNT_MAX}" value="${defaultCount}" />
         <div><button id="kb-start">Treino livre</button></div>
+        ${onInstall ? '<button id="kb-install" class="kb-mode" style="background:#e8b923;color:#2b2620">📲 Instalar app (jogar offline)</button>' : ''}
         <p style="margin-top:16px;font-size:12px">${controls.join('<br/>')}</p>
       `);
+      c.querySelector<HTMLButtonElement>('#kb-install')?.addEventListener('click', () => onInstall?.());
       const input = c.querySelector<HTMLInputElement>('#kb-count')!;
       const count = () => clampNpcCount(input.value.trim() === '' ? Number.NaN : Number(input.value));
       c.querySelector<HTMLButtonElement>('#kb-start')!.addEventListener('click', () => onStart(count(), 'training'));
       c.querySelector<HTMLButtonElement>('#kb-zombie')!.addEventListener('click', () => onStart(count(), 'waves'));
       input.addEventListener('keydown', (e) => { if (e.key === 'Enter') onStart(count(), 'training'); });
+    },
+    setInstall(handler) {
+      onInstall = handler;
+    },
+    showInstallHelp(stepsHtml, onBack) {
+      const c = show(`
+        <h1>📲 Instalar o jogo</h1>
+        <p style="text-align:left;line-height:1.6;font-size:15px;color:#2b2620">${stepsHtml}</p>
+        <button id="kb-back" class="kb-mode">Voltar</button>
+      `);
+      c.querySelector<HTMLButtonElement>('#kb-back')!.addEventListener('click', onBack);
     },
     setKillsLabel(label) {
       killsLabel = label;
@@ -347,9 +356,6 @@ export function createOverlay(root: HTMLElement, touch = false): Overlay {
       bannerEl.classList.remove('pop');
       void bannerEl.offsetWidth;
       bannerEl.classList.add('pop');
-    },
-    setSlowMo(on) {
-      slow.classList.toggle('on', on);
     },
     setWeaponHint(text) {
       const visible = !!text && overlay.hidden;

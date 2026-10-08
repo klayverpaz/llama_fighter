@@ -1,0 +1,17 @@
+{
+  "name": "Kickboxing de Palito",
+  "short_name": "Kickboxing",
+  "description": "Samurai de palito contra ondas de zumbis, com armas malucas, lhamas e ragdoll.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#1d1426",
+  "theme_color": "#1d1426",
+  "lang": "pt-BR",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

@@ -33,28 +33,6 @@ function run(g: Game, seconds: number, input: Partial<GameInput> = {}): GameEven
 }
 
 describe('zombie kinds in play', () => {
-  it('a Bombardeiro runs up, blows itself up, hurts the player and knocks the zombies around it down', async () => {
-    const g = await game();
-    const bomber = spawn(g, 'exploder', 0, 6);
-    const buddy = spawn(g, 'walker', 0.8, 6.6);
-    buddy.hp = 30;
-    const events = run(g, 4);
-    expect(bomber.detonated).toBe(true);
-    expect(events.some((e) => e.kind === 'explosion')).toBe(true);
-    expect(events.some((e) => e.kind === 'hurt')).toBe(true);
-    expect(buddy.state).toBe('ragdoll');
-  });
-
-  it('shooting a Bombardeiro inside a crowd sets off a chain reaction', async () => {
-    const g = await game();
-    const bombers = [spawn(g, 'exploder', 0, 12), spawn(g, 'exploder', 1.6, 12.4), spawn(g, 'exploder', 3.2, 12.8)];
-    run(g, 0.05);
-    bombers[0].kill(new THREE.Vector3(0, 0, 1));
-    const events = run(g, 0.3);
-    expect(events.filter((e) => e.kind === 'explosion').length).toBe(3);
-    expect(bombers.every((b) => b.state === 'ragdoll')).toBe(true);
-  });
-
   it('the Cavaleiro Zumbi rides a zombie llama, fast; kill the rider and the llama goes down', async () => {
     const g = await game();
     const rider = spawn(g, 'cavalry', 0, 16);

@@ -16,8 +16,8 @@ describe('zombie kinds', () => {
   it('wave 1 is only walkers; each later wave unlocks something new', () => {
     expect(Object.keys(tally(1))).toEqual(['walker']);
     expect(Object.keys(tally(2)).sort()).toEqual(['runner', 'walker']);
-    expect(Object.keys(tally(3)).sort()).toEqual(['exploder', 'runner', 'walker']);
-    expect(Object.keys(tally(5)).sort()).toEqual(['brute', 'cavalry', 'exploder', 'runner', 'walker']);
+    expect(Object.keys(tally(3)).sort()).toEqual(['runner', 'walker']);
+    expect(Object.keys(tally(5)).sort()).toEqual(['brute', 'cavalry', 'runner', 'walker']);
     expect(tally(9).boss).toBeUndefined();
   });
 

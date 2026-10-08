@@ -116,3 +116,26 @@ describe('revolute limit sign convention', () => {
     physics.dispose();
   });
 });
+
+describe('after dispose', () => {
+  it('reading a removed figure (a stump still bleeding) never touches the physics world, which keeps working', async () => {
+    const physics = await createPhysics();
+    const f = new Figure(physics, new THREE.Scene(), { id: 'gone', color: 0, position: new THREE.Vector3(0, PELVIS_HEIGHT, 0) });
+    physics.step();
+    f.toRagdoll();
+    f.detach('head');
+    const stump = () => f.stumpPosition('head');
+    f.dispose();
+    expect(() => stump()).not.toThrow();
+    expect(() => f.segmentPosition('head')).not.toThrow();
+    expect(() => f.maxSpeed()).not.toThrow();
+    expect(() => f.syncMeshes()).not.toThrow();
+    expect(() => f.applyImpulse('torso', new THREE.Vector3(0, 1, 0), new THREE.Vector3())).not.toThrow();
+    expect(() => f.blast(new THREE.Vector3(), 3, 5)).not.toThrow();
+    expect(() => f.dispose()).not.toThrow();
+    expect(() => physics.step()).not.toThrow();
+    const g = new Figure(physics, new THREE.Scene(), { id: 'next', color: 0, position: new THREE.Vector3(3, PELVIS_HEIGHT, 0) });
+    physics.step();
+    expect(g.pelvisPosition().y).toBeCloseTo(PELVIS_HEIGHT, 1);
+  });
+});

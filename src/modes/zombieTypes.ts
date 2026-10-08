@@ -1,6 +1,6 @@
 import { zombieStats, type ZombieStats } from './waves';
 
-export type ZombieKind = 'walker' | 'runner' | 'exploder' | 'brute' | 'cavalry' | 'boss';
+export type ZombieKind = 'walker' | 'runner' | 'brute' | 'cavalry' | 'boss';
 
 export interface ZombieKindSpec {
   /** HUD / banner name (plural for "NOVO: …"). */
@@ -25,7 +25,6 @@ export interface ZombieKindSpec {
 export const ZOMBIE_KINDS: Record<ZombieKind, ZombieKindSpec> = {
   walker: { name: 'Andarilho', plural: 'ANDARILHOS', firstWave: 1, weight: 10, skin: 0x6f9a4a, eyes: 0xfff35a, hpMul: 1, speedMul: 1, damageMul: 1, bulk: 1, head: 1 },
   runner: { name: 'Corredor', plural: 'CORREDORES', firstWave: 2, weight: 5, skin: 0xb9c99a, eyes: 0xff3b2f, hpMul: 0.6, speedMul: 1.65, damageMul: 0.8, bulk: 0.85, head: 0.95 },
-  exploder: { name: 'Bombardeiro', plural: 'BOMBARDEIROS', firstWave: 3, weight: 3, skin: 0xe0762c, eyes: 0xfff1a0, hpMul: 0.75, speedMul: 1.2, damageMul: 1, bulk: 1.25, head: 1.15 },
   brute: { name: 'Brutamontes', plural: 'BRUTAMONTES', firstWave: 4, weight: 2, skin: 0x6b4b8e, eyes: 0x7dfcff, hpMul: 3.2, speedMul: 0.75, damageMul: 1.8, bulk: 1.9, head: 1.2 },
   cavalry: { name: 'Cavaleiro Zumbi', plural: 'CAVALEIROS ZUMBIS', firstWave: 5, weight: 2, skin: 0x8a9a6a, eyes: 0xff3b2f, hpMul: 1.4, speedMul: 1, damageMul: 1.3, bulk: 1, head: 1 },
   boss: { name: 'Rei Brutamontes', plural: 'O REI', firstWave: 5, weight: 0, skin: 0xc9a227, eyes: 0xff2020, hpMul: 14, speedMul: 1.1, damageMul: 2.6, bulk: 1.7, head: 1.2, scale: 4 },
@@ -34,8 +33,6 @@ export const ZOMBIE_KINDS: Record<ZombieKind, ZombieKindSpec> = {
 export const CAVALRY_SPEED = 5.2;
 /** No single hit takes more than this (HP is 100): even the boss needs two. */
 export const MAX_HIT = 60;
-/** Bombardeiro: blast radius around it, and the damage to the player at the centre. */
-export const EXPLODER = { radius: 3.6, playerDamage: 55, triggerReach: 1.6 };
 
 export const isBossWave = (wave: number) => wave > 0 && wave % 5 === 0;
 

@@ -3,7 +3,7 @@ import { joystickVector, STICK_RUN } from './touchMath';
 
 /** One-shot actions from on-screen buttons. */
 export type TouchWeapon = 'fists' | 'rifle' | 'shotgun' | 'rpg' | 'freeze' | 'tesla' | 'antigrav' | 'llamaCannon';
-export type TouchAction = StrikeName | 'weapon' | 'reload' | 'mount' | 'slowmo' | 'use' | 'jump' | `pick:${TouchWeapon}`;
+export type TouchAction = StrikeName | 'weapon' | 'reload' | 'mount' | 'use' | 'jump' | `pick:${TouchWeapon}`;
 
 const WEAPON_PICKS: Array<[TouchWeapon, string]> = [
   ['fists', 'Mãos'], ['rifle', 'AK-47'], ['shotgun', 'Escopeta'], ['rpg', 'Bazuca'],
@@ -55,9 +55,6 @@ const CSS = `
 .kb-picker-grid { display: grid; grid-template-columns: repeat(4, 84px); gap: 10px; }
 .kb-picker .kb-btn { position: relative; width: 84px; height: 64px; border-radius: 12px; font-size: 13px; }
 .kb-picker .kb-btn.current { background: #2a6fdb; color: #fffdf7; }
-.kb-slowmo { position: absolute; right: calc(max(14px, env(safe-area-inset-right)) + 54px); top: max(14px, env(safe-area-inset-top));
-  width: 44px; height: 44px; border-radius: 10px; font-size: 18px; }
-.kb-slowmo.on { background: #2a6fdb; color: #fffdf7; }
 .kb-btn.jump { width: 64px; height: 64px; right: 12px; bottom: 206px; background: #7fbf5a; font-size: 13px; }
 .kb-btn.use { width: 72px; height: 56px; border-radius: 12px; right: 112px; bottom: 112px; background: #e8b923; font-size: 14px; }
 body.kb-touch-mode .kb-hud { display: none !important; }
@@ -107,7 +104,6 @@ export class TouchControls {
   private readonly aimButton: HTMLElement;
   private readonly weaponButton: HTMLElement;
   private readonly mountButton: HTMLElement;
-  private readonly slowmoButton: HTMLElement;
   private readonly useButton: HTMLElement;
   private readonly picker: HTMLDivElement;
   private readonly pickButtons: HTMLElement[] = [];
@@ -163,8 +159,6 @@ export class TouchControls {
 
     const pause = this.button(this.layer, 'pause kb-pause', 'II', { onDown: () => onPause() });
     pause.style.borderRadius = '10px';
-    this.slowmoButton = this.button(this.layer, 'kb-slowmo', '⏱', { onDown: () => this.actions.push('slowmo') });
-    this.slowmoButton.style.borderRadius = '10px';
 
     // Weapon picker: tapping the weapon button opens a grid of every weapon.
     this.picker = document.createElement('div');
@@ -220,10 +214,6 @@ export class TouchControls {
   /** Limit the weapon picker to the weapons the player owns (wave mode). */
   setOwned(owned: ReadonlySet<string>): void {
     for (const b of this.pickButtons) b.dataset.locked = owned.has(b.dataset.weapon!) ? '' : '1';
-  }
-
-  setSlowMo(on: boolean): void {
-    this.slowmoButton.classList.toggle('on', on);
   }
 
   setWeapon(weapon: TouchWeapon, mounted: boolean): void {

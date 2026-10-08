@@ -4,7 +4,7 @@ Joguinho 3D no browser: um boneco de palito em terceira pessoa dá golpes de kic
 
 ## A ilha
 
-A arena é uma ilha flutuante: passou da borda, cai no vazio. No Modo Zumbi cair é morte ("CAIU NO LIMBO"); no Treino você reaparece no centro. Zumbis empurrados para fora (explosão, tiro, chute) também caem e contam como abate.
+A arena é uma ilha flutuante: passou da borda, cai no vazio. No Modo Zumbi cair é morte ("CAIU NO LIMBO"); no Treino você reaparece no centro. Zumbis empurrados para fora (explosão de bazuca, tiro, chute) também caem e contam como abate.
 
 Cada partida gera um layout novo de obstáculos: caixotes (alguns empilhados), muros baixos de pedra, pilares e rochas. Eles são sólidos — param balas, foguetes e corpos, e os zumbis precisam contorná-los. Caixotes e muros baixos dá para subir pulando; pilares e rochas não. O jogador é um samurai: kabuto com chifres dourados, armadura laqueada vermelha, katana na cintura e estandarte nas costas.
 
@@ -23,12 +23,11 @@ Inspirado no Call of Duty Zombies. Os zumbis saem do chão nas bordas da arena: 
 |---|---|---|
 | 1 | Andarilho | Verde, olhos amarelos. |
 | 2 | Corredor | Pálido e magro, olhos vermelhos: rápido e frágil. |
-| 3 | Bombardeiro | Laranja e pulsando: explode quando morre ou quando te alcança, derrubando os zumbis em volta (reação em cadeia). |
 | 4 | Brutamontes | Roxo e parrudo, olhos azuis: aguenta muito e bate forte. |
 | 5 | Cavaleiro Zumbi | Montado numa **lhama zumbi** (lã podre, costelas à mostra, olhos vermelhos): rápido; tiro na lhama fere o cavaleiro, e ela cai quando ele morre. |
 | 5, 10, 15… | Rei Brutamontes | Chefão **4× maior** (cerca de 7 m), dourado e de coroa, com barra de vida própria e garras que alcançam de longe. |
 
-**Desmembramento e sangue**: cada acerto espirra sangue e deixa poças no chão. Braços e pernas acumulam dano e voam quando passam do limite — um zumbi sem braço continua vindo, sem perna cai. Tiro na cabeça que mata pode arrancá-la (com a escopeta, sempre), o high kick também. Explosões arrancam membros, o zumbi congelado estilhaça em pedaços, e corpos no chão podem ser despedaçados a tiro. O cotoco jorra sangue por alguns segundos.
+**Desmembramento e sangue**: cada acerto espirra sangue e deixa poças no chão. Braços e pernas acumulam dano e voam quando passam do limite — um zumbi sem braço continua vindo, sem perna cai. Tiro na cabeça que mata pode arrancá-la (com a escopeta, sempre), o high kick também. Explosões de bazuca arrancam membros, o zumbi congelado estilhaça em pedaços, e corpos no chão podem ser despedaçados a tiro. O cotoco jorra sangue por alguns segundos.
 
 Nenhum golpe tira mais de 60 de vida (a vida é 100), nem do chefão. O céu escurece a cada onda: dia, entardecer, crepúsculo e, da onda 7 em diante, noite com neblina e lua de sangue.
 
@@ -53,13 +52,23 @@ Abra a URL impressa. Escolha a quantidade de inimigos (ou use `?npcs=12`) e cliq
 | Cruzado esquerdo / direito | U / I |
 | Low kick / Chute frontal / High kick | N / M / , |
 | Trocar arma | Q ou roda do mouse; 1 mãos, 2 AK-47, 3 escopeta, 4 bazuca, 5 congelante, 6 Tesla, 7 antigravidade, 8 lança-lhamas |
-| Câmera lenta | T (no celular, ⏱) |
 | Mirar por cima do ombro | Botão direito do mouse |
 | Atirar (automático) | Botão esquerdo do mouse |
 | Recarregar | R (recarrega sozinho quando esvazia) |
 | Montar / descer da lhama | F (no celular, botão Lhama) |
 | Usar (Caixa Misteriosa) | E (no celular, botão Usar) |
 | Reiniciar | Backspace |
+
+## Jogar no celular sem internet (app instalável)
+
+O build de produção é um PWA: na primeira visita o service worker guarda o jogo inteiro (página, código com a física embutida, ícones) no aparelho, e depois ele abre e roda sem internet.
+
+1. Sirva o build por HTTPS uma vez (ex.: `npm run build && npx vite preview --port 4173` + `ngrok http 4173`).
+2. **Android (Chrome)**: abra o link, menu ⋮ → **Instalar app** (ou "Adicionar à tela inicial").
+3. **iPhone (Safari)**: abra o link, Compartilhar → **Adicionar à Tela de Início**, e abra o app pelo ícone **uma vez ainda com internet** (no iPhone o app instalado tem armazenamento próprio).
+4. Quando aparecer **"Pronto para jogar offline ✓"**, já pode desligar a internet.
+
+Quando houver uma versão nova no link, o app se atualiza na próxima vez que for aberto com internet. O ícone é gerado por `python3 scripts/make-icons.py`.
 
 ## Desenvolvimento
 
@@ -85,9 +94,9 @@ F (ou o botão Lhama no celular) monta o boneco numa lhama, que anda e corre mai
 - **Antigravidade**: o NPC vira ragdoll e cai para cima por 2,6 s, depois despenca lá de cima.
 - **Lança-Lhamas**: dispara lhamas em arco; elas nocauteiam quem acertam e ficam quicando pelo cenário como objetos físicos.
 
-## Câmera lenta e combos
+## Combos
 
-T (ou ⏱) liga a câmera lenta. Derrubar vários de uma vez (foguete no grupo, corrente elétrica) ou em sequência rápida dispara câmera lenta automática e mostra o combo na tela: DUPLO NOCAUTE!, TRIPLO!, QUÁDRUPLO!, MASSACRE!
+Derrubar vários de uma vez ou em sequência rápida mostra o combo na tela: DUPLO NOCAUTE!, TRIPLO!, QUÁDRUPLO!, MASSACRE!
 
 ## Escopeta
 
