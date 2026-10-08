@@ -63,4 +63,26 @@ describe('Game', () => {
     game.dispose();
     physics.dispose();
   }, 30_000);
+
+  it('twenty NPCs crowd around an idle player without overlapping each other or the player', async () => {
+    const physics = await createPhysics();
+    const game = new Game(physics, new THREE.Scene(), 20);
+    for (let i = 0; i < Math.round(10 / DT); i++) game.step(DT, idle);
+
+    const standing = game.npcs.filter((n) => n.standing);
+    expect(standing).toHaveLength(20);
+    const ground = (a: THREE.Vector3, b: THREE.Vector3) => Math.hypot(a.x - b.x, a.z - b.z);
+    let minPair = Infinity;
+    let minPlayer = Infinity;
+    for (let i = 0; i < standing.length; i++) {
+      minPlayer = Math.min(minPlayer, ground(standing[i].position, game.player.position));
+      for (let j = i + 1; j < standing.length; j++) minPair = Math.min(minPair, ground(standing[i].position, standing[j].position));
+    }
+    console.log(`20 NPCs after 10 s: min NPC-NPC ${minPair.toFixed(3)} m, min NPC-player ${minPlayer.toFixed(3)} m`);
+    expect(minPair).toBeGreaterThanOrEqual(0.7);
+    expect(minPlayer).toBeGreaterThanOrEqual(0.75);
+
+    game.dispose();
+    physics.dispose();
+  }, 30_000);
 });

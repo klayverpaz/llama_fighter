@@ -43,6 +43,26 @@ describe('steer', () => {
     const none = steer({ self: origin, player: { x: 0, z: 10 }, others: [{ x: 3, z: 0 }], state: 'chase' });
     expect(none.velocity.x).toBeCloseTo(0, 6);
   });
+
+  it('a close neighbour wins over chasing: net velocity points away from it', () => {
+    const r = steer({ self: origin, player: { x: 10, z: 0 }, others: [{ x: 0.2, z: 0 }], state: 'chase' });
+    expect(r.state).toBe('chase');
+    expect(r.velocity.x).toBeLessThan(0);
+    expect(Math.hypot(r.velocity.x, r.velocity.z)).toBeLessThanOrEqual(NPC_TUNING.speed + 1e-9);
+  });
+
+  it('backs away from the player when holding inside the minimum distance', () => {
+    const r = steer({ self: origin, player: { x: 0, z: 0.5 }, others: [], state: 'hold' });
+    expect(r.state).toBe('hold');
+    expect(r.velocity.z).toBeLessThan(0);
+    expect(r.velocity.x).toBeCloseTo(0, 6);
+    expect(r.yaw).toBeCloseTo(0, 6);
+  });
+
+  it('holds still between the minimum and hold distances', () => {
+    const r = steer({ self: origin, player: { x: 0, z: (NPC_TUNING.minPlayerDistance + NPC_TUNING.holdDistance) / 2 }, others: [], state: 'hold' });
+    expect(Math.hypot(r.velocity.x, r.velocity.z)).toBeCloseTo(0, 6);
+  });
 });
 
 describe('ringPositions', () => {

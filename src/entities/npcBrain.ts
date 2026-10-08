@@ -7,7 +7,13 @@ export const NPC_TUNING = {
   holdDistance: 1.0,
   resumeDistance: 1.1,
   separationRadius: 0.9,
-  separationStrength: 2.0,
+  /** Max push (m/s) at zero distance; well above `speed` so crowding always wins over chasing. */
+  separationStrength: 6.0,
+  /** Inside this ground distance to the player the NPC is pushed away, even while holding. */
+  minPlayerDistance: 0.8,
+  playerPushStrength: 16.0,
+  /** Push magnitude (m/s) at which the chase is fully cancelled; small so crowds settle spread out. */
+  chaseCancelPush: 0.5,
   ragdollMinSeconds: 4,
   ragdollMaxSeconds: 8,
   settleSpeed: 0.6,
@@ -45,21 +51,35 @@ export function steer({ self, player, others, state }: SteerInput): SteerOutput 
   if (state === 'chase' && dist <= NPC_TUNING.holdDistance) next = 'hold';
   else if (state === 'hold' && dist >= NPC_TUNING.resumeDistance) next = 'chase';
 
-  let vx = 0;
-  let vz = 0;
-  if (next === 'chase' && dist > 1e-6) {
-    vx = (dx / dist) * NPC_TUNING.speed;
-    vz = (dz / dist) * NPC_TUNING.speed;
-  }
+  // Push-apart terms first, so they can veto the chase.
+  let sx = 0;
+  let sz = 0;
   for (const o of others) {
     const ox = self.x - o.x;
     const oz = self.z - o.z;
     const d = Math.hypot(ox, oz);
     if (d < NPC_TUNING.separationRadius && d > 1e-6) {
       const k = (1 - d / NPC_TUNING.separationRadius) * NPC_TUNING.separationStrength;
-      vx += (ox / d) * k;
-      vz += (oz / d) * k;
+      sx += (ox / d) * k;
+      sz += (oz / d) * k;
     }
+  }
+  if (dist < NPC_TUNING.minPlayerDistance && dist > 1e-6) {
+    const k = (1 - dist / NPC_TUNING.minPlayerDistance) * NPC_TUNING.playerPushStrength;
+    sx -= (dx / dist) * k;
+    sz -= (dz / dist) * k;
+  }
+
+  // The chase fades out as the push grows; the result never exceeds the walking speed.
+  const chase = next === 'chase' && dist > 1e-6
+    ? Math.max(0, 1 - Math.hypot(sx, sz) / NPC_TUNING.chaseCancelPush) * NPC_TUNING.speed
+    : 0;
+  let vx = chase > 0 ? (dx / dist) * chase + sx : sx;
+  let vz = chase > 0 ? (dz / dist) * chase + sz : sz;
+  const v = Math.hypot(vx, vz);
+  if (v > NPC_TUNING.speed) {
+    vx *= NPC_TUNING.speed / v;
+    vz *= NPC_TUNING.speed / v;
   }
   return { velocity: { x: vx, z: vz }, yaw: yawToward(self, player), state: next };
 }
