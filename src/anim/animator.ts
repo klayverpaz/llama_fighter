@@ -42,6 +42,12 @@ export class Animator {
     else this.blend = null;
   }
 
+  /** Drop any one-shot clip and pending blend (e.g. a flinch interrupted by a KO). */
+  stopAction(): void {
+    this.action = null;
+    this.blend = null;
+  }
+
   /** Blend from arbitrary rotations (e.g. read back from a ragdoll) to the animated target. */
   blendFromRots(rots: JointRots, seconds: number): void {
     this.blend = { from: cloneJointRots(rots), t: 0, duration: Math.max(seconds, 1e-3) };

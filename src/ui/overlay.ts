@@ -76,7 +76,7 @@ export function createOverlay(root: HTMLElement): Overlay {
         <p style="margin-top:16px;font-size:12px">${CONTROLS.join('<br/>')}</p>
       `);
       const input = c.querySelector<HTMLInputElement>('#kb-count')!;
-      const start = () => onStart(clampNpcCount(Number(input.value)));
+      const start = () => onStart(clampNpcCount(input.value.trim() === '' ? Number.NaN : Number(input.value)));
       c.querySelector<HTMLButtonElement>('#kb-start')!.addEventListener('click', start);
       input.addEventListener('keydown', (e) => { if (e.key === 'Enter') start(); });
       input.focus();

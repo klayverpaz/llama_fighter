@@ -7,7 +7,7 @@ Joguinho 3D no browser: um boneco de palito em terceira pessoa dá golpes de kic
     npm install
     npm run dev
 
-Abra a URL impressa. Escolha a quantidade de inimigos (ou use `?npcs=12`) e clique em Começar. Clique na tela para travar o mouse; Esc pausa.
+Abra a URL impressa. Escolha a quantidade de inimigos (ou use `?npcs=12`) e clique em Começar. Começar trava o mouse. Esc pausa; clique em Continuar para voltar.
 
 ## Controles
 

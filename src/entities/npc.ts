@@ -115,6 +115,7 @@ export class Npc {
     this.yaw = yawFromQuaternion(root.rotation);
     this.figure.toPosed();
     this.figure.beginRootBlend(NPC_TUNING.recoverSeconds);
+    this.animator.stopAction();
     this.animator.blendFromRots(rots, NPC_TUNING.recoverSeconds);
     this.hp = NPC_MAX_HP;
     this.state = 'recovering';

@@ -37,6 +37,20 @@ describe('Animator', () => {
     expect(a.actionName).toBeNull();
   });
 
+  it('stopAction drops the playing clip and any pending blend', () => {
+    const a = new Animator(STANCE);
+    a.update(0);
+    a.play(punch, 0.3);
+    a.update(0.1);
+    a.stopAction();
+    expect(a.actionName).toBeNull();
+    const r = a.update(0);
+    const plain = new Animator(STANCE);
+    plain.update(0);
+    const expected = plain.update(0.1);
+    expect(r.shoulderL.angleTo(expected.shoulderL)).toBeCloseTo(0, 5);
+  });
+
   it('blends from captured rotations toward the target over the given time', () => {
     const a = new Animator(STANCE);
     a.update(0);
