@@ -377,9 +377,14 @@ export class Player {
     return this.rootPosition().add(new THREE.Vector3(Math.sin(this.yaw) * 20, 0.45, Math.cos(this.yaw) * 20));
   }
 
-  /** Next (or previous, step −1) weapon for Q / the mouse wheel; the llama skips the fists. */
+  /** Owned weapons in the order Q / the mouse wheel go through; the llama skips the fists. */
+  weaponCycle(): Weapon[] {
+    return WEAPON_CYCLE.filter((w) => this.owned.has(w) && !(this.mounted && w === 'fists'));
+  }
+
+  /** Next (or previous, step −1) weapon for Q / the mouse wheel. */
   nextWeapon(step = 1): Weapon {
-    const cycle = WEAPON_CYCLE.filter((w) => this.owned.has(w) && !(this.mounted && w === 'fists'));
+    const cycle = this.weaponCycle();
     const i = Math.max(0, cycle.indexOf(this.weapon));
     return cycle[(i + step + cycle.length) % cycle.length];
   }

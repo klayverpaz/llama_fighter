@@ -14,6 +14,15 @@ export interface WaveHud {
   box: { affordable: boolean; rolling: boolean } | null;
 }
 
+export interface WeaponSlot {
+  id: string;
+  label: string;
+  /** Number key that selects it (desktop), or null. */
+  key: string | null;
+  /** −1 previous, 0 selected, 1 and 2 next (see weaponStrip). */
+  offset: number;
+}
+
 export interface Overlay {
   showStart(defaultCount: number, onStart: (count: number, mode: 'training' | 'waves') => void): void;
   /** "📲 Instalar app" button on the start screen (null hides it). */
@@ -29,6 +38,8 @@ export interface Overlay {
   hitMarker(kill: boolean): void;
   /** Small prompt at the bottom centre (e.g. how to draw the rifle); null hides it. */
   setWeaponHint(text: string | null): void;
+  /** Compact weapon list (previous, selected, next two) above the ammo panel; null hides it. */
+  setWeaponStrip(slots: WeaponSlot[] | null): void;
   /** Big centred combo text that pops and fades. */
   banner(text: string): void;
   /** Zombie-mode HUD; null hides it (training). */
@@ -114,6 +125,14 @@ body.kb-waves .kb-hud { display: none; }
 .kb-card .kb-mode { display: block; width: 100%; margin-top: 12px; }
 .kb-card .kb-mode.zombie { background: #4f7a32; font-size: 20px; }
 
+.kb-weapons { position: absolute; right: 16px; bottom: 96px; width: 200px; height: 116px; pointer-events: none; }
+.kb-weapons[hidden] { display: none; }
+.kb-weapons .row { position: absolute; right: 0; height: 20px; line-height: 20px; padding: 0 8px; white-space: nowrap;
+  font: 700 12px ui-sans-serif, system-ui, sans-serif; color: #2b2620; background: rgba(255, 253, 247, 0.75);
+  border: 1px solid rgba(43, 38, 32, 0.5); border-radius: 6px; }
+.kb-weapons .row.on { font-size: 16px; padding: 0 10px; height: 26px; line-height: 26px; background: rgba(255, 253, 247, 0.92);
+  border-color: #2b2620; border-radius: 8px; box-shadow: 3px 3px 0 #2b2620; }
+.kb-weapons .k { display: inline-block; min-width: 12px; margin-right: 6px; font-size: 11px; color: #8a8174; text-align: center; }
 .kb-ammo .n { font-size: 26px; font-variant-numeric: tabular-nums; }
 .kb-ammo .lbl { font-size: 12px; letter-spacing: 0.08em; color: #5c554b; }
 .kb-ammo .low { color: #c0392b; }
@@ -176,6 +195,12 @@ export function createOverlay(root: HTMLElement, touch = false): Overlay {
   ammo.hidden = true;
   let lastAmmo = '';
 
+  const weapons = document.createElement('div');
+  weapons.className = 'kb-weapons';
+  weapons.hidden = true;
+  let lastStrip = '';
+  let stripSlots: WeaponSlot[] = [];
+
   const hint = document.createElement('div');
   hint.className = 'kb-hint';
   hint.hidden = true;
@@ -210,7 +235,7 @@ export function createOverlay(root: HTMLElement, touch = false): Overlay {
   const bossName = bossEl.querySelector('.name') as HTMLElement;
   const bossBar = bossEl.querySelector('.bar i') as HTMLElement;
 
-  root.append(blood, overlay, hud, ko, cross, hit, ammo, hint, bannerEl, wave, points, health, prompt, bossEl);
+  root.append(blood, overlay, hud, ko, cross, hit, ammo, weapons, hint, bannerEl, wave, points, health, prompt, bossEl);
 
   function show(html: string): HTMLElement {
     card.innerHTML = html;
@@ -349,6 +374,33 @@ export function createOverlay(root: HTMLElement, touch = false): Overlay {
           ? `<div class="lbl">${rifle.label}</div><div class="n">recarregando…</div>`
           : `<div class="lbl">${rifle.label}${rifle.reloading ? ' · recarregando' : ''}</div>`
             + `<div class="n"><span class="${lowAmmo}">${rifle.ammo}</span> / ${rifle.mag}</div>`;
+      }
+    },
+    setWeaponStrip(slots) {
+      const visible = !!slots && slots.length > 0 && overlay.hidden;
+      weapons.hidden = !visible;
+      if (!slots || !visible) return;
+      const key = slots.map((s) => `${s.offset}:${s.id}`).join(',');
+      if (key === lastStrip) return;
+      // Where the new selection sat in the old list: the list slides from there (down the wheel → up).
+      const selected = slots.find((s) => s.offset === 0)?.id;
+      const moved = stripSlots.find((s) => s.id === selected)?.offset ?? 0;
+      lastStrip = key;
+      stripSlots = slots;
+      const ROW = 29;
+      weapons.innerHTML = slots.map((s) => {
+        const on = s.offset === 0;
+        const top = (s.offset + 1) * ROW + (on ? 0 : 3);
+        const opacity = on ? 1 : s.offset === 2 ? 0.55 : 0.85;
+        return `<div class="row${on ? ' on' : ''}" style="top:${top}px;opacity:${opacity}">`
+          + `${s.key ? `<span class="k">${s.key}</span>` : ''}${s.label}</div>`;
+      }).join('');
+      if (moved !== 0) {
+        weapons.style.transition = 'none';
+        weapons.style.transform = `translateY(${moved * ROW}px)`;
+        void weapons.offsetWidth;
+        weapons.style.transition = 'transform 0.14s ease-out';
+        weapons.style.transform = '';
       }
     },
     banner(text) {

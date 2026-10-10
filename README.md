@@ -51,7 +51,7 @@ Abra a URL impressa. Escolha a quantidade de inimigos (ou use `?npcs=12`) e cliq
 | Jab / Direto | J / K |
 | Cruzado esquerdo / direito | U / I |
 | Low kick / Chute frontal / High kick | N / M / , |
-| Trocar arma | Q ou roda do mouse; 1 mãos, 2 AK-47, 3 escopeta, 4 bazuca, 5 congelante, 6 Tesla, 7 antigravidade, 8 lança-lhamas |
+| Trocar arma | Q ou roda do mouse (para baixo: próxima, para cima: anterior); 1 mãos, 2 AK-47, 3 escopeta, 4 bazuca, 5 congelante, 6 Tesla, 7 antigravidade, 8 lança-lhamas. No canto inferior direito aparecem a arma atual, a anterior e as duas próximas |
 | Mirar por cima do ombro | Botão direito do mouse |
 | Atirar (automático) | Botão esquerdo do mouse |
 | Recarregar | R (recarrega sozinho quando esvazia) |

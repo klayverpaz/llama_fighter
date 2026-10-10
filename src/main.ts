@@ -19,6 +19,7 @@ import { stickMoveDirection } from './input/touchMath';
 import { generateObstacles } from './world/obstacles';
 import { detectInstallPlatform, installSteps } from './pwa/installHelp';
 import { ARENA as WAVE_ARENA } from './modes/waveMode';
+import { weaponStrip } from './ui/weaponStrip';
 
 async function main() {
   const app = document.getElementById('app')!;
@@ -380,8 +381,16 @@ async function main() {
     if (w?.over) {
       overlay.setRifleHud(null);
       overlay.setWeaponHint(null);
+      overlay.setWeaponStrip(null);
       return;
     }
+    // Touch already has its own weapon picker; on desktop this is what Q / the wheel cycle through.
+    overlay.setWeaponStrip(touch ? null : weaponStrip(p.weaponCycle(), p.weapon).map(({ weapon, offset }) => ({
+      id: weapon,
+      label: weapon === 'fists' ? 'Mãos' : GUNS[weapon].label,
+      key: String(WEAPON_KEYS.indexOf(weapon) + 1),
+      offset,
+    })));
     if (!p.armed) {
       overlay.setRifleHud(null);
       overlay.setWeaponHint(p.weapon === 'fists'
