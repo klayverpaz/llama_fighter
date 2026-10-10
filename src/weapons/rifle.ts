@@ -1,36 +1,21 @@
 import type { SegmentName } from '../figure/skeleton';
+import { TUNING } from '../tuning/tuning';
 
-export const RIFLE = {
-  /** 600 rounds per minute. */
-  fireInterval: 0.1,
-  magSize: 30,
-  reloadSeconds: 1.9,
-  range: 150,
-  /** Cone half-angle in radians: first shot, growth per shot, cap, recovery per second. */
-  spreadBase: 0.004,
-  spreadPerShot: 0.007,
-  spreadMax: 0.06,
-  spreadRecovery: 0.15,
-  /** Extra spread while moving / not aiming down sights. */
-  spreadMoving: 0.02,
-  spreadHip: 0.025,
-  /** Impulse along the bullet direction (N·s): on the KO shot, and on every shot into a body already down. */
-  koImpulse: 38,
-  ragdollImpulse: 14,
-  /** Camera kick per shot, radians. */
-  recoilPitch: 0.010,
-  recoilYaw: 0.006,
-};
+/** AK-47 numbers from tuning.json (spread = cone half-angle in radians, impulses in N·s). */
+export const RIFLE = TUNING.rifle;
 
-/** HP is 50: three torso shots, one to the head. */
-export function damageForSegment(segment: SegmentName): number {
+/** Damage group of a body segment, for the per-gun damage tables in tuning.json. */
+export function segmentGroup(segment: SegmentName): 'head' | 'torso' | 'pelvis' | 'upperLimb' | 'lowerLimb' {
   switch (segment) {
-    case 'head': return 100;
-    case 'torso': return 18;
-    case 'pelvis': return 15;
-    case 'upperArmL': case 'upperArmR': case 'upperLegL': case 'upperLegR': return 11;
-    default: return 8;
+    case 'head': case 'torso': case 'pelvis': return segment;
+    case 'upperArmL': case 'upperArmR': case 'upperLegL': case 'upperLegR': return 'upperLimb';
+    default: return 'lowerLimb';
   }
+}
+
+/** With the default HP of 50: three torso shots, one to the head. */
+export function damageForSegment(segment: SegmentName): number {
+  return RIFLE.damage[segmentGroup(segment)];
 }
 
 export interface RifleState {
@@ -82,7 +67,7 @@ export function tickRifle(s: RifleState, dt: number, input: RifleInput): RifleTi
       while (next.cooldown <= 1e-9 && next.ammo > 0) {
         shots++;
         next.ammo--;
-        next.cooldown += RIFLE.fireInterval;
+        next.cooldown += Math.max(0.01, RIFLE.fireInterval);
         next.spread = Math.min(RIFLE.spreadMax, next.spread + RIFLE.spreadPerShot);
       }
       next.dryClicked = false;

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { STRIKES, STRIKE_NAMES, KEY_TO_STRIKE, strikeDuration, NPC_MAX_HP } from './strikes';
+import { STRIKES, STRIKE_NAMES, KEY_TO_STRIKE, strikeDuration, COMBAT } from './strikes';
 import { createAttackState, canAttack, startAttack, tickAttack, recordHit } from './attack';
 import { applyDamage, impulseVector } from './damage';
 
@@ -68,7 +68,7 @@ describe('attack state machine', () => {
 
 describe('damage', () => {
   it('seven jabs knock out a full-HP NPC, six do not', () => {
-    let hp = NPC_MAX_HP;
+    let hp = COMBAT.npcMaxHp;
     for (let i = 0; i < 6; i++) {
       const r = applyDamage(hp, STRIKES.jab);
       hp = r.hp;

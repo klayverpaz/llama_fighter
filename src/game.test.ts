@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { createPhysics } from './physics/world';
 import { Game } from './game';
 import { PELVIS_HEIGHT } from './figure/skeleton';
-import { NPC_MAX_HP, STRIKES } from './combat/strikes';
+import { COMBAT, STRIKES } from './combat/strikes';
 import type { PlayerInput } from './entities/player';
 import { findHits } from './combat/hits';
 
@@ -36,14 +36,14 @@ describe('Game', () => {
 
     game.step(DT, { ...idle, strikes: ['frontKick'] });
     run(1.0);
-    expect(npc.hp).toBe(NPC_MAX_HP - STRIKES.frontKick.damage);
+    expect(npc.hp).toBe(COMBAT.npcMaxHp - STRIKES.frontKick.damage);
     expect(npc.standing).toBe(true);
     expect(npc.state).toBe('hold');
     expect(Math.hypot(npc.position.x - game.player.position.x, npc.position.z - game.player.position.z)).toBeLessThanOrEqual(1.05);
 
     game.step(DT, { ...idle, strikes: ['frontKick'] });
     run(1.0);
-    expect(npc.hp).toBe(NPC_MAX_HP - 2 * STRIKES.frontKick.damage);
+    expect(npc.hp).toBe(COMBAT.npcMaxHp - 2 * STRIKES.frontKick.damage);
 
     game.step(DT, { ...idle, strikes: ['frontKick'] });
     run(1.0);
@@ -75,13 +75,13 @@ describe('Game', () => {
       if (active && findHits(physics, active.point, active.strike.hitRadius, 'player').some((h) => h.figureId === npc.id)) overlapped = true;
     }
     expect(overlapped).toBe(true);
-    expect(npc.hp).toBe(NPC_MAX_HP);
+    expect(npc.hp).toBe(COMBAT.npcMaxHp);
     expect(game.knockouts).toBe(1);
 
     run(9);
     expect(npc.standing).toBe(true);
     expect(npc.figure.mode).toBe('posed');
-    expect(npc.hp).toBe(NPC_MAX_HP);
+    expect(npc.hp).toBe(COMBAT.npcMaxHp);
     expect(npc.figure.pelvisPosition().y).toBeCloseTo(PELVIS_HEIGHT, 1);
 
     game.dispose();

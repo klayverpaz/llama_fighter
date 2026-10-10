@@ -19,6 +19,7 @@ import { stickMoveDirection } from './input/touchMath';
 import { generateObstacles } from './world/obstacles';
 import { detectInstallPlatform, installSteps } from './pwa/installHelp';
 import { ARENA as WAVE_ARENA } from './modes/waveMode';
+import { weaponStrip } from './ui/weaponStrip';
 
 async function main() {
   const app = document.getElementById('app')!;
@@ -113,11 +114,25 @@ async function main() {
     touchPaused = true;
     touch.hide();
     overlay.showPaused(() => {
+      blurFields();
       touchPaused = false;
       overlay.hide();
       touch.show();
       sfx.unlock();
-    }, () => startGame(npcCount));
+    }, () => startGame(npcCount), backToMenu);
+  }
+
+  /** Leave the current match and show the start screen. */
+  function backToMenu() {
+    game?.dispose();
+    game = null;
+    effects.clear();
+    keyboard.clear();
+    touchPaused = false;
+    touch?.hide();
+    if (document.pointerLockElement) document.exitPointerLock();
+    changeAtmosphere(atmosphereFor(1));
+    overlay.showStart(npcCount, startGame);
   }
 
   /** Phones: go fullscreen and landscape where the browser allows it (Android); iOS just ignores it. */
@@ -133,12 +148,24 @@ async function main() {
 
   document.addEventListener('visibilitychange', () => { if (document.hidden) pauseTouch(); });
 
+  /** Resuming must not leave a dev-panel field focused (it would swallow the game's keys). */
+  const blurFields = () => (document.activeElement as HTMLElement | null)?.blur?.();
+
   mouse.onLockChange = (locked) => {
     if (!game || touch || game.waves?.over) return;
-    if (locked) overlay.hide();
-    else overlay.showPaused(() => mouse.requestLock());
+    if (locked) { blurFields(); overlay.hide(); }
+    else overlay.showPaused(() => mouse.requestLock(), undefined, backToMenu);
   };
   renderer.domElement.addEventListener('click', () => { if (game && !touch) mouse.requestLock(); });
+
+  // Dev builds only: the balancing switch and panel (the dynamic import is dropped from production).
+  if (import.meta.env.DEV) {
+    const { createDevPanel } = await import('./dev/devPanel');
+    let store: Storage | null = null;
+    try { store = window.localStorage; } catch { /* blocked: tweaks last this session */ }
+    const panel = createDevPanel(app, store);
+    overlay.setDevToggle({ get on() { return panel.mode.on; }, set: (on) => panel.setOn(on) });
+  }
 
   setupInstall(() => overlay.showStart(npcCount, startGame));
   overlay.showStart(npcCount, startGame);
@@ -267,12 +294,14 @@ async function main() {
         case 'death':
           sfx.gameOver();
           window.setTimeout(() => {
+            if (game !== g) return; // left for the menu or restarted meanwhile
             if (document.pointerLockElement) document.exitPointerLock();
             touch?.hide();
             overlay.showGameOver(
               { wave: e.wave, kills: e.kills, points: e.points, reason: e.reason },
               () => startGame(npcCount, 'waves'),
               () => startGame(npcCount, 'training'),
+              backToMenu,
             );
           }, 1800);
           break;
@@ -367,7 +396,7 @@ async function main() {
         hp: w.health.hp,
         maxHp: 100,
         instaKill: w.instaKillLeft,
-        box: w.nearBox ? { affordable: w.points >= 950, rolling: w.boxRolling } : null,
+        box: w.nearBox ? { cost: w.boxCost, affordable: w.points >= w.boxCost, rolling: w.boxRolling } : null,
       });
       touch?.setUse(w.nearBox && !w.over);
       overlay.setBossBar(w.boss && w.boss.state !== 'ragdoll'
@@ -380,13 +409,21 @@ async function main() {
     if (w?.over) {
       overlay.setRifleHud(null);
       overlay.setWeaponHint(null);
+      overlay.setWeaponStrip(null);
       return;
     }
+    // Touch already has its own weapon picker; on desktop this is what Q / the wheel cycle through.
+    overlay.setWeaponStrip(touch ? null : weaponStrip(p.weaponCycle(), p.weapon).map(({ weapon, offset }) => ({
+      id: weapon,
+      label: weapon === 'fists' ? 'Mãos' : GUNS[weapon].label,
+      key: String(WEAPON_KEYS.indexOf(weapon) + 1),
+      offset,
+    })));
     if (!p.armed) {
       overlay.setRifleHud(null);
       overlay.setWeaponHint(p.weapon === 'fists'
         ? (g.waves
-          ? (touch ? 'Toque em Armas para sacar a AK · Caixa Misteriosa dá armas novas' : 'Clique ou Q saca a AK · E na Caixa Misteriosa ($950) dá armas novas')
+          ? (touch ? 'Toque em Armas para sacar a AK · Caixa Misteriosa dá armas novas' : 'Clique ou Q saca a AK · E na Caixa Misteriosa dá armas novas')
           : (touch ? 'Toque em Armas para escolher uma de 7 armas' : 'Clique ou Q saca a arma · 1–8 escolhem · F lhama'))
         : null);
       return;

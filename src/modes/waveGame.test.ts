@@ -96,7 +96,7 @@ describe('zombie waves', () => {
     expect(game.waves!.remaining).toBe(40);
   });
 
-  it('the Mystery Box costs 950 and gives a new gun after the roll', async () => {
+  it('the Mystery Box charges the current price and gives a new gun after the roll', async () => {
     const game = await waveGame();
     const w = game.waves!;
     w.points = 1200;
@@ -105,7 +105,7 @@ describe('zombie waves', () => {
     expect(w.nearBox).toBe(true);
     const events = run(game, 0.1, { use: true });
     expect(events.some((e) => e.kind === 'boxOpen')).toBe(true);
-    expect(w.points).toBe(1200 - POINTS.boxCost);
+    expect(w.points).toBe(1200 - w.boxCost);
     const result = run(game, ARENA.boxRollSeconds + 0.2).find((e) => e.kind === 'boxResult');
     expect(result).toBeDefined();
     const gun = result!.kind === 'boxResult' ? result!.gun : 'rifle';

@@ -1,29 +1,10 @@
+import { TUNING } from '../tuning/tuning';
+
 export interface Vec2 { x: number; z: number }
 
 export type NpcMoveState = 'chase' | 'hold';
 
-export const NPC_TUNING = {
-  speed: 2.5,
-  holdDistance: 1.0,
-  resumeDistance: 1.1,
-  separationRadius: 0.9,
-  /** Max push (m/s) at zero distance; well above `speed` so crowding always wins over chasing. */
-  separationStrength: 6.0,
-  /** Inside this ground distance to the player the NPC is pushed away, even while holding. */
-  minPlayerDistance: 0.8,
-  playerPushStrength: 16.0,
-  /** Push magnitude (m/s) at which the chase is fully cancelled; small so crowds settle spread out. */
-  chaseCancelPush: 0.5,
-  ragdollMinSeconds: 4,
-  ragdollMaxSeconds: 8,
-  settleSpeed: 0.6,
-  recoverSeconds: 0.8,
-  flinchSeconds: 0.3,
-  pushbackDistance: 0.3,
-  /** A bullet that doesn't drop the NPC staggers it back a little. */
-  shotPushbackDistance: 0.12,
-  pushbackSeconds: 0.2,
-};
+export const NPC_TUNING = TUNING.npc;
 
 export interface SteerInput {
   self: Vec2;

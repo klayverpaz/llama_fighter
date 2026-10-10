@@ -2,6 +2,7 @@ import type * as THREE from 'three';
 import type { SegmentName } from '../figure/skeleton';
 import { RIFLE, createRifleState, damageForSegment, tickRifle, type RifleInput, type RifleState, type RifleTick } from './rifle';
 import { SHOTGUN, createShotgunState, pelletDamage, tickShotgun } from './shotgun';
+import { TUNING } from '../tuning/tuning';
 
 export type GunName = 'rifle' | 'shotgun' | 'rpg' | 'freeze' | 'tesla' | 'antigrav' | 'llamaCannon';
 export const GUN_NAMES: GunName[] = ['rifle', 'shotgun', 'rpg', 'freeze', 'tesla', 'antigrav', 'llamaCannon'];
@@ -47,15 +48,21 @@ export interface GunSpec {
   damage(segment: SegmentName, distance: number): number;
 }
 
-/** Fixed-cadence gun (no spread growth): auto or semi, whole-magazine reload. */
+/** Fixed-cadence gun (no spread growth), whole-magazine reload: its numbers in tuning.json `guns`. */
 interface SimpleGun {
   fireInterval: number;
   magSize: number;
   reloadSeconds: number;
-  auto: boolean;
+  range?: number;
+  spreadAim: number;
+  spreadHip: number;
+  recoilPitch: number;
+  recoilYaw: number;
+  koImpulse: number;
+  ragdollImpulse: number;
 }
 
-function simpleTick(cfg: SimpleGun) {
+function simpleTick(cfg: SimpleGun, auto: boolean) {
   return (s: RifleState, dt: number, input: RifleInput): RifleTick => {
     const next: RifleState = { ...s, cooldown: Math.max(0, s.cooldown - dt) };
     let shots = 0;
@@ -73,7 +80,7 @@ function simpleTick(cfg: SimpleGun) {
       reloadStarted = true;
     } else if (input.trigger) {
       // Semi-auto guns need the trigger released between shots (dryClicked doubles as "trigger was down").
-      const ready = next.cooldown <= 1e-9 && (cfg.auto || !next.dryClicked);
+      const ready = next.cooldown <= 1e-9 && (auto || !next.dryClicked);
       if (next.ammo > 0 && ready) {
         shots = 1;
         next.ammo--;
@@ -93,69 +100,43 @@ function simpleTick(cfg: SimpleGun) {
   };
 }
 
-function simpleGun(
-  name: GunName, kind: GunKind, label: string, cfg: SimpleGun,
-  extra: { range: number; spreadAim: number; spreadHip: number; recoilPitch: number; recoilYaw: number; koImpulse?: number; ragdollImpulse?: number },
-): GunSpec {
+/** The spec reads `cfg` through getters, so tuning edits apply to the gun live. */
+function simpleGun(name: GunName, kind: GunKind, label: string, auto: boolean, cfg: SimpleGun, range = () => cfg.range ?? 100): GunSpec {
   return {
     name, kind, label,
-    magSize: cfg.magSize,
-    range: extra.range,
     pellets: 1,
     reloadStyle: 'mag',
-    reloadSeconds: cfg.reloadSeconds,
-    koImpulse: extra.koImpulse ?? 0,
-    ragdollImpulse: extra.ragdollImpulse ?? 0,
-    recoilPitch: extra.recoilPitch,
-    recoilYaw: extra.recoilYaw,
-    create: () => ({ ammo: cfg.magSize, cooldown: 0, reloading: 0, spread: extra.spreadAim, dryClicked: false }),
-    tick: simpleTick(cfg),
-    spread: (_s, aim) => extra.spreadAim + (extra.spreadHip - extra.spreadAim) * (1 - aim),
+    get magSize() { return cfg.magSize; },
+    get range() { return range(); },
+    get reloadSeconds() { return cfg.reloadSeconds; },
+    get koImpulse() { return cfg.koImpulse; },
+    get ragdollImpulse() { return cfg.ragdollImpulse; },
+    get recoilPitch() { return cfg.recoilPitch; },
+    get recoilYaw() { return cfg.recoilYaw; },
+    create: () => ({ ammo: cfg.magSize, cooldown: 0, reloading: 0, spread: cfg.spreadAim, dryClicked: false }),
+    tick: simpleTick(cfg, auto),
+    spread: (_s, aim) => cfg.spreadAim + (cfg.spreadHip - cfg.spreadAim) * (1 - aim),
     damage: () => 0,
   };
 }
 
-/** Explosion and special-weapon numbers (used by the game when resolving shots). */
-export const SPECIAL = {
-  rocketSpeed: 32,
-  rocketGravity: 1.2,
-  blastRadius: 4.5,
-  /** Damage at the centre of the blast, fading to zero at the edge. */
-  blastDamage: 140,
-  /** Velocity kick (m/s) given to every body segment at the centre of the blast, fading to the edge. */
-  blastSpeed: 11,
-  llamaSpeed: 19,
-  llamaDamage: 60,
-  llamaImpulse: 70,
-  /** How long launched llamas keep bouncing around before vanishing, and how many at once. */
-  llamaPropSeconds: 14,
-  maxLlamaProps: 12,
-  freezeSeconds: 5,
-  shatterImpulse: 55,
-  teslaRange: 28,
-  teslaChainRadius: 5,
-  teslaMaxTargets: 5,
-  teslaDamage: 26,
-  teslaImpulse: 14,
-  floatSeconds: 2.6,
-  /** Gravity multiplier while floating (negative = falls upward). */
-  floatGravity: -0.35,
-};
+/** Explosion and special-weapon numbers (used by the game when resolving shots); see tuning.json. */
+export const SPECIAL = TUNING.special;
 
 export const GUNS: Record<GunName, GunSpec> = {
   rifle: {
     name: 'rifle',
     kind: 'hitscan',
     label: 'AK-47',
-    magSize: RIFLE.magSize,
-    range: RIFLE.range,
     pellets: 1,
     reloadStyle: 'mag',
-    reloadSeconds: RIFLE.reloadSeconds,
-    koImpulse: RIFLE.koImpulse,
-    ragdollImpulse: RIFLE.ragdollImpulse,
-    recoilPitch: RIFLE.recoilPitch,
-    recoilYaw: RIFLE.recoilYaw,
+    get magSize() { return RIFLE.magSize; },
+    get range() { return RIFLE.range; },
+    get reloadSeconds() { return RIFLE.reloadSeconds; },
+    get koImpulse() { return RIFLE.koImpulse; },
+    get ragdollImpulse() { return RIFLE.ragdollImpulse; },
+    get recoilPitch() { return RIFLE.recoilPitch; },
+    get recoilYaw() { return RIFLE.recoilYaw; },
     create: createRifleState,
     tick: tickRifle,
     spread: (s, aim, moving) => s.spread + (moving ? RIFLE.spreadMoving : 0) + RIFLE.spreadHip * (1 - aim),
@@ -165,36 +146,29 @@ export const GUNS: Record<GunName, GunSpec> = {
     name: 'shotgun',
     kind: 'hitscan',
     label: 'Escopeta',
-    magSize: SHOTGUN.magSize,
-    range: SHOTGUN.range,
-    pellets: SHOTGUN.pellets,
     reloadStyle: 'shell',
-    reloadSeconds: SHOTGUN.shellSeconds,
-    koImpulse: SHOTGUN.koImpulse,
-    ragdollImpulse: SHOTGUN.ragdollImpulse,
-    recoilPitch: SHOTGUN.recoilPitch,
-    recoilYaw: SHOTGUN.recoilYaw,
+    get magSize() { return SHOTGUN.magSize; },
+    get range() { return SHOTGUN.range; },
+    get pellets() { return Math.max(1, Math.round(SHOTGUN.pellets)); },
+    get reloadSeconds() { return SHOTGUN.shellSeconds; },
+    get koImpulse() { return SHOTGUN.koImpulse; },
+    get ragdollImpulse() { return SHOTGUN.ragdollImpulse; },
+    get recoilPitch() { return SHOTGUN.recoilPitch; },
+    get recoilYaw() { return SHOTGUN.recoilYaw; },
     create: createShotgunState,
     tick: tickShotgun,
     spread: (_s, aim, moving) => SHOTGUN.spreadAim + (SHOTGUN.spreadHip - SHOTGUN.spreadAim) * (1 - aim) + (moving ? SHOTGUN.spreadMoving : 0),
     damage: pelletDamage,
   },
-  rpg: simpleGun('rpg', 'rocket', 'Bazuca', { fireInterval: 0.9, magSize: 1, reloadSeconds: 2.2, auto: false },
-    { range: 200, spreadAim: 0.004, spreadHip: 0.03, recoilPitch: 0.09, recoilYaw: 0.02 }),
-  freeze: simpleGun('freeze', 'freeze', 'Raio Congelante', { fireInterval: 0.28, magSize: 12, reloadSeconds: 1.6, auto: true },
-    { range: 70, spreadAim: 0.003, spreadHip: 0.02, recoilPitch: 0.006, recoilYaw: 0.003, ragdollImpulse: 10 }),
-  tesla: simpleGun('tesla', 'tesla', 'Arma Tesla', { fireInterval: 0.55, magSize: 6, reloadSeconds: 1.8, auto: true },
-    { range: SPECIAL.teslaRange, spreadAim: 0.002, spreadHip: 0.015, recoilPitch: 0.025, recoilYaw: 0.01 }),
-  antigrav: simpleGun('antigrav', 'antigrav', 'Antigravidade', { fireInterval: 0.45, magSize: 8, reloadSeconds: 1.6, auto: true },
-    { range: 80, spreadAim: 0.003, spreadHip: 0.02, recoilPitch: 0.012, recoilYaw: 0.004 }),
-  llamaCannon: simpleGun('llamaCannon', 'llama', 'Lança-Lhamas', { fireInterval: 0.6, magSize: 5, reloadSeconds: 2.0, auto: true },
-    { range: 200, spreadAim: 0.01, spreadHip: 0.04, recoilPitch: 0.05, recoilYaw: 0.015 }),
+  rpg: simpleGun('rpg', 'rocket', 'Bazuca', false, TUNING.guns.rpg),
+  freeze: simpleGun('freeze', 'freeze', 'Raio Congelante', true, TUNING.guns.freeze),
+  tesla: simpleGun('tesla', 'tesla', 'Arma Tesla', true, TUNING.guns.tesla, () => SPECIAL.teslaRange),
+  antigrav: simpleGun('antigrav', 'antigrav', 'Antigravidade', true, TUNING.guns.antigrav),
+  llamaCannon: simpleGun('llamaCannon', 'llama', 'Lança-Lhamas', true, TUNING.guns.llamaCannon),
 };
 
 /** Number keys 1..8: fists, then the guns in GUN_NAMES order. */
 export const WEAPON_KEYS: Array<'fists' | GunName> = ['fists', ...GUN_NAMES];
 
 /** Spare rounds carried for each gun in wave mode (refilled by Max Ammo and between waves). */
-export const RESERVE: Record<GunName, number> = {
-  rifle: 210, shotgun: 40, rpg: 8, freeze: 48, tesla: 30, antigrav: 32, llamaCannon: 20,
-};
+export const RESERVE: Record<GunName, number> = TUNING.reserve;

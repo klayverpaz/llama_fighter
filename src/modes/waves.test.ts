@@ -1,9 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { WaveDirector, WAVES, waveSize, zombieStats, PlayerHealth, HEALTH, rollPowerUp } from './waves';
+import { WaveDirector, WAVES, waveSize, zombieStats, PlayerHealth, HEALTH, rollPowerUp, boxCost } from './waves';
 
 const DT = 1 / 60;
 
 describe('waves', () => {
+  it('the Mystery Box costs 950 in wave 1 and 1.2x more every wave', () => {
+    expect([0, 1, 2, 3, 5].map(boxCost)).toEqual([950, 950, 1140, 1370, 1970]);
+  });
+
   it('each wave brings 5 more zombies, capped at 40', () => {
     expect([1, 2, 3, 7, 8, 9, 20].map(waveSize)).toEqual([5, 10, 15, 35, 40, 40, 40]);
   });

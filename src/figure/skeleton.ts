@@ -1,4 +1,5 @@
 import { Vector3 } from 'three';
+import { TUNING } from '../tuning/tuning';
 
 export type SegmentName =
   | 'pelvis' | 'torso' | 'head'
@@ -81,9 +82,4 @@ export const LIMB_ENDS: Record<Limb, { segment: SegmentName; local: Vector3 }> =
   footR: { segment: 'lowerLegR', local: new Vector3(0, -0.21, 0) },
 };
 
-export const BODY_TUNING = {
-  linearDamping: 0.5,
-  angularDamping: 3,
-  friction: 0.8,
-  restitution: 0.05,
-};
+export const BODY_TUNING = TUNING.body;

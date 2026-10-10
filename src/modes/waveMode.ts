@@ -9,11 +9,12 @@ import {
   createAntigravModel, createFreezeModel, createLlamaCannonModel, createRpgModel, createTeslaModel,
 } from '../weapons/specialModels';
 import {
-  WaveDirector, PlayerHealth, POINTS, POWERUPS, rollPowerUp, type PowerUpKind,
+  WaveDirector, PlayerHealth, POINTS, POWERUPS, boxCost, rollPowerUp, type PowerUpKind,
 } from './waves';
 import { createMysteryBox, createPowerUpMesh } from './waveModels';
 import { pushOut, type Obstacle } from '../world/obstacles';
-import { MAX_HIT, ZOMBIE_KINDS, isBossWave, kindStats, newKinds, pickZombieKind, type ZombieKind } from './zombieTypes';
+import { ZOMBIES, ZOMBIE_KINDS, isBossWave, kindStats, newKinds, pickZombieKind, type ZombieKind } from './zombieTypes';
+import { TUNING } from '../tuning/tuning';
 
 /** What the wave mode needs from the game (kept narrow so it can be tested through Game). */
 export interface WaveHost {
@@ -44,17 +45,10 @@ export type WaveEvent =
   | { kind: 'boxOpen' }
   | { kind: 'boxResult'; gun: GunName };
 
-export const ARENA = {
-  /** Zombies climb out of the ground on this ring (around the arena centre)… */
-  spawnMin: 15,
-  spawnMax: 19,
-  /** …but never this close to the player. */
-  spawnAwayFromPlayer: 9,
+/** Spawn ring, box use radius/roll time and starting points come from tuning.json. */
+export const ARENA = Object.assign(TUNING.arena, {
   boxPosition: new THREE.Vector3(0, 0, -7),
-  boxUseRadius: 1.9,
-  boxRollSeconds: 2.4,
-  startPoints: 500,
-};
+});
 
 interface DroppedPowerUp {
   kind: PowerUpKind;
@@ -112,6 +106,11 @@ export class WaveMode {
     return this.director.wave;
   }
 
+  /** What the Mystery Box costs right now (grows every wave). */
+  get boxCost(): number {
+    return boxCost(this.wave);
+  }
+
   /** Zombies of this wave still to kill (alive or waiting to spawn). */
   get remaining(): number {
     return this.director.remaining(this.aliveCount());
@@ -133,7 +132,7 @@ export class WaveMode {
     this.health.update(dt);
     if (input.damage > 0) {
       // Several claws can land on the same tick; never more than one big hit's worth at once.
-      const taken = this.health.damage(Math.min(MAX_HIT, input.damage));
+      const taken = this.health.damage(Math.min(ZOMBIES.maxHit, input.damage));
       if (taken > 0) this.host.emit({ kind: 'hurt', amount: taken, hp: this.health.hp });
       if (this.health.dead) {
         const torso = player.figure.segmentPosition('torso');
@@ -311,8 +310,8 @@ export class WaveMode {
       g.position.y = ARENA.boxPosition.y + 1.0 + (this.rolling > 0 ? (1 - this.rolling / ARENA.boxRollSeconds) * 0.4 : 0.4);
     }
 
-    if (use && this.nearBox && this.rolling <= 0 && !this.shown && this.points >= POINTS.boxCost) {
-      this.points -= POINTS.boxCost;
+    if (use && this.nearBox && this.rolling <= 0 && !this.shown && this.points >= this.boxCost) {
+      this.points -= this.boxCost;
       this.rolling = ARENA.boxRollSeconds;
       this.showcaseTimer = 0;
       // Prefer a gun the player doesn't have yet.

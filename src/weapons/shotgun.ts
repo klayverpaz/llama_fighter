@@ -1,41 +1,13 @@
 import type { SegmentName } from '../figure/skeleton';
-import type { RifleInput, RifleState, RifleTick } from './rifle';
+import { TUNING } from '../tuning/tuning';
+import { segmentGroup, type RifleInput, type RifleState, type RifleTick } from './rifle';
 
-/** Pump-action 12 gauge: 8 shells, 9 pellets per shot, shell-by-shell reload. */
-export const SHOTGUN = {
-  /** Time between shots (includes working the pump). */
-  fireInterval: 0.85,
-  /** The pump stroke starts this long after the shot and takes `pumpSeconds`. */
-  pumpDelay: 0.14,
-  pumpSeconds: 0.42,
-  /** How far the forend slides back (metres, rifle frame). */
-  pumpTravel: 0.09,
-  magSize: 8,
-  shellSeconds: 0.5,
-  pellets: 9,
-  range: 60,
-  /** Pellet cone half-angle: shouldered, from the hip, extra while moving. */
-  spreadAim: 0.055,
-  spreadHip: 0.085,
-  spreadMoving: 0.012,
-  /** Per pellet: on the KO pellet, and on every pellet into a body already down (they add up). */
-  koImpulse: 30,
-  ragdollImpulse: 22,
-  recoilPitch: 0.06,
-  recoilYaw: 0.02,
-  /** Full damage up to here, fading linearly to `minFalloff` at `falloffEnd`. */
-  falloffStart: 6,
-  falloffEnd: 26,
-  minFalloff: 0.25,
-};
+/** Pump-action 12 gauge: shell-by-shell reload, damage falling off with distance (numbers: tuning.json). */
+export const SHOTGUN = TUNING.shotgun;
 
 /** Per-pellet damage. Point blank to the chest: ~80 for nine pellets (HP is 50). */
 export function pelletDamage(segment: SegmentName, distance: number): number {
-  const base = segment === 'head' ? 30
-    : segment === 'torso' ? 9
-    : segment === 'pelvis' ? 8
-    : segment === 'upperArmL' || segment === 'upperArmR' || segment === 'upperLegL' || segment === 'upperLegR' ? 6
-    : 4;
+  const base = SHOTGUN.damage[segmentGroup(segment)];
   const t = (distance - SHOTGUN.falloffStart) / (SHOTGUN.falloffEnd - SHOTGUN.falloffStart);
   const k = Math.min(1, Math.max(SHOTGUN.minFalloff, 1 - t * (1 - SHOTGUN.minFalloff)));
   return base * k;

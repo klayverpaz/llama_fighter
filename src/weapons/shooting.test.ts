@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { createPhysics } from '../physics/world';
 import { Game, coneSample, type GameEvent, type GameInput } from '../game';
 import { PELVIS_HEIGHT } from '../figure/skeleton';
-import { NPC_MAX_HP } from '../combat/strikes';
+import { COMBAT } from '../combat/strikes';
 import { damageForSegment } from './rifle';
 
 const DT = 1 / 60;
@@ -61,7 +61,7 @@ describe('shooting', () => {
     expect(npc.state).toBe('ragdoll');
     expect(npc.figure.mode).toBe('ragdoll');
     expect(game.knockouts).toBe(1);
-    expect(hits.slice(0, 2)).toEqual([NPC_MAX_HP - damageForSegment('torso'), NPC_MAX_HP - 2 * damageForSegment('torso')]);
+    expect(hits.slice(0, 2)).toEqual([COMBAT.npcMaxHp - damageForSegment('torso'), COMBAT.npcMaxHp - 2 * damageForSegment('torso')]);
     expect(shots(events).at(-1)!.result).toBe('killed');
   });
 
