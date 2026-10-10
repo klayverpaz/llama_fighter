@@ -14,7 +14,7 @@ Inspirado no Call of Duty Zombies. Os zumbis saem do chão nas bordas da arena: 
 
 - **Vida**: 100, regenera alguns segundos depois de parar de apanhar. Os zumbis atacam com garras quando chegam perto. Morreu, acabou: tela de fim com a onda, abates e pontos.
 - **Pontos**: 10 por acerto, 60 por abate. Começa com $500, os punhos e a AK-47 com munição limitada.
-- **Caixa Misteriosa** ($950, tecla E): sorteia uma arma nova (escopeta, bazuca, congelante, Tesla, antigravidade ou lança-lhamas).
+- **Caixa Misteriosa** (tecla E; custa $950 na onda 1 e fica 20% mais cara a cada onda): sorteia uma arma nova (escopeta, bazuca, congelante, Tesla, antigravidade ou lança-lhamas).
 - **Power-ups** que caem dos zumbis: Munição Máxima, Insta-Kill (15 s, qualquer acerto mata) e Nuke (mata todos os zumbis vivos).
 
 **Tipos de zumbi** (cada onda libera algo novo, e os tipos novos ficam mais comuns):
@@ -38,7 +38,7 @@ O Treino livre continua disponível na tela inicial, com todas as armas e boneco
     npm install
     npm run dev
 
-Abra a URL impressa. Escolha a quantidade de inimigos (ou use `?npcs=12`) e clique em Começar. Começar trava o mouse. Esc pausa; clique em Continuar para voltar.
+Abra a URL impressa. Escolha a quantidade de inimigos (ou use `?npcs=12`) e clique em Começar. Começar trava o mouse. Esc pausa; clique em Continuar para voltar ou em Menu principal para trocar de modo (também aparece na tela de fim de jogo).
 
 ## Controles
 
@@ -76,11 +76,13 @@ Quando houver uma versão nova no link, o app se atualiza na próxima vez que fo
     npm run typecheck
     npm run build
 
-Arquitetura e decisões: `docs/superpowers/specs/2026-10-07-kickboxing-mvp-design.md`. Valores de ajuste ficam em `src/figure/skeleton.ts`, `src/combat/strikes.ts` e `src/entities/npcBrain.ts`.
+Arquitetura e decisões: `docs/superpowers/specs/2026-10-07-kickboxing-mvp-design.md`. Todos os valores de balanceamento (dano, vida, velocidades, pontos, preço da caixa, armas, ondas…) ficam em `src/tuning/tuning.json`.
+
+**Modo dev** (só no `npm run dev`): marque "🛠 Modo dev" no menu principal ou na pausa e aparece, no canto superior direito, um painel com todos os valores do `tuning.json` para editar com o jogo rodando (valores alterados ficam em vermelho). Desligar volta aos valores do arquivo; religar recupera os seus ajustes (eles ficam salvos no navegador). "Baixar JSON" baixa um arquivo no mesmo formato do `tuning.json` — para adotar os valores, substitua o `src/tuning/tuning.json` por ele. "Restaurar padrão" descarta os ajustes. Alguns valores só valem para o que surgir depois (vida de zumbi novo, pontos iniciais da próxima partida, física dos ragdolls).
 
 ## Celular
 
-No celular (ou com `?touch=1` no desktop) aparecem controles de toque: joystick no polegar esquerdo (até a borda corre), arrastar o lado direito gira a câmera, botões de golpe, botão AK para sacar a arma e, com ela, FOGO (segure e arraste para mirar enquanto atira), MIRA (alterna) e Rec. O botão II pausa. Jogue com o celular deitado; no Android o jogo entra em tela cheia.
+No celular (ou com `?touch=1` no desktop) aparecem controles de toque: joystick no polegar esquerdo (até a borda corre), arrastar o lado direito gira a câmera, botões de golpe, botão AK para sacar a arma e, com ela, FOGO (segure e arraste para mirar enquanto atira), MIRA (alterna) e Rec. O botão II pausa (dá para continuar, reiniciar ou voltar ao menu principal). Jogue com o celular deitado; no Android o jogo entra em tela cheia.
 
 ## Lhama
 

@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { createPhysics } from '../physics/world';
 import { Game, type GameEvent, type GameInput } from '../game';
 import { PELVIS_HEIGHT } from '../figure/skeleton';
-import { NPC_MAX_HP } from '../combat/strikes';
+import { COMBAT } from '../combat/strikes';
 import { GUN_NAMES, SPECIAL, type GunName } from './guns';
 
 const DT = 1 / 60;
@@ -110,7 +110,7 @@ describe('special weapons', () => {
     const events = shoot(game, torso(game, 0), 0.2);
     const bolt = events.find((e) => e.kind === 'lightning');
     expect(bolt && bolt.kind === 'lightning' && bolt.points.length).toBe(4);
-    for (const n of game.npcs) expect(n.hp).toBe(NPC_MAX_HP - SPECIAL.teslaDamage);
+    for (const n of game.npcs) expect(n.hp).toBe(COMBAT.npcMaxHp - SPECIAL.teslaDamage);
   });
 
   it('anti-gravity: the NPC floats up into the sky, then falls back down', async () => {

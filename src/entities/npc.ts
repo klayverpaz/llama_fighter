@@ -8,7 +8,7 @@ import { LLAMA, type Llama } from './llama';
 import type { ZombieKind } from '../modes/zombieTypes';
 import { FLINCH } from '../anim/strikeClips';
 import { applyDamage, impulseVector } from '../combat/damage';
-import { NPC_MAX_HP, type StrikeDef } from '../combat/strikes';
+import { COMBAT, type StrikeDef } from '../combat/strikes';
 import { RIFLE, damageForSegment } from '../weapons/rifle';
 import { SPECIAL } from '../weapons/guns';
 import { lerpAngle } from '../core/math';
@@ -61,7 +61,7 @@ export const ZOMBIE_TUNING = {
 
 export class Npc {
   readonly animator: Animator;
-  hp = NPC_MAX_HP;
+  hp = COMBAT.npcMaxHp;
   /** Zombie (wave mode) settings, or null for the training dummies. */
   readonly zombie: ZombieConfig | null;
   /** Zombie corpse ready to be removed from the game. */
@@ -102,7 +102,7 @@ export class Npc {
     this.zombie = zombie;
     this.animator = new Animator(zombie?.kind === 'cavalry' ? ZOMBIE_RIDE : zombie ? ZOMBIE : STANCE);
     this.scale = zombie?.scale ?? 1;
-    this.maxHp = zombie ? zombie.hp : NPC_MAX_HP;
+    this.maxHp = zombie ? zombie.hp : COMBAT.npcMaxHp;
     if (zombie) {
       this.hp = zombie.hp;
       // Cavalry gallops in; everything else climbs out of the ground.
@@ -539,7 +539,7 @@ export class Npc {
     this.figure.beginRootBlend(NPC_TUNING.recoverSeconds);
     this.animator.stopAction();
     this.animator.blendFromRots(rots, NPC_TUNING.recoverSeconds);
-    this.hp = NPC_MAX_HP;
+    this.hp = COMBAT.npcMaxHp;
     this.state = 'recovering';
     this.timer = 0;
   }
@@ -553,7 +553,7 @@ export class Npc {
     this.animator.stopAction();
     this.position.copy(this.home);
     this.yaw = 0;
-    this.hp = NPC_MAX_HP;
+    this.hp = COMBAT.npcMaxHp;
     this.state = 'recovering';
     this.timer = 0;
   }

@@ -50,7 +50,9 @@ Logic modules are kept free of `three`/Rapier imports so they can be unit-tested
 
 ## Tuning values
 
-Gameplay numbers are concentrated in `figure/skeleton.ts` (body, ragdoll), `combat/strikes.ts` (strikes, NPC HP), `entities/npcBrain.ts` (steering), `weapons/guns.ts` (guns) and `modes/zombieTypes.ts` (per-wave zombie stats; `MAX_HIT` caps any single hit at 60 damage).
+All balance numbers live in `src/tuning/tuning.json`, loaded by `src/tuning/tuning.ts` into the live `TUNING` object. Gameplay modules alias its sections (`POINTS = TUNING.points`, `NPC_TUNING = TUNING.npc`, `STRIKES.jab` is `TUNING.strikes.jab` with key/limb attached, gun specs read their numbers through getters) and must read them at use time, never copy them into module-level constants, so the dev panel's in-place edits apply live. To add a tunable: add it to the JSON, read it through `TUNING`, and optionally add a tooltip in `TUNING_NOTES`. `zombies.maxHit` caps any single hit on the player.
+
+**Dev mode** (dev builds only, `import.meta.env.DEV`; `src/dev/devPanel.ts` is dynamically imported so production drops it): a switch on the start and pause screens shows a top-right panel that edits every `TUNING` value. `tuning/devMode.ts` (pure, tested) keeps the dev values in localStorage; off restores `tuning.json`, on restores the dev values. "Baixar JSON" downloads a dump in the `tuning.json` shape, which can replace that file.
 
 ## Docs
 

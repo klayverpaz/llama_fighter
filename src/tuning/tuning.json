@@ -1,0 +1,189 @@
+{
+  "waves": {
+    "perWave": 5,
+    "maxPerWave": 40,
+    "maxAlive": 24,
+    "spawnInterval": 0.55,
+    "intermission": 7,
+    "firstIntermission": 3
+  },
+  "zombies": {
+    "baseHp": 50,
+    "hpPerWave": 12,
+    "speedEarly": 1.5,
+    "earlyUntilWave": 2,
+    "speedMid": 2.4,
+    "midUntilWave": 5,
+    "speedLate": 3.2,
+    "speedPerLateWave": 0.15,
+    "speedMax": 4.2,
+    "damageBase": 20,
+    "damagePerWave": 3,
+    "damageMax": 45,
+    "kindSpeedMax": 6,
+    "cavalrySpeed": 5.2,
+    "maxHit": 60,
+    "bossEvery": 5
+  },
+  "zombieKinds": {
+    "walker": { "firstWave": 1, "weight": 10, "hpMul": 1, "speedMul": 1, "damageMul": 1 },
+    "runner": { "firstWave": 2, "weight": 5, "hpMul": 0.6, "speedMul": 1.65, "damageMul": 0.8 },
+    "brute": { "firstWave": 4, "weight": 2, "hpMul": 3.2, "speedMul": 0.75, "damageMul": 1.8 },
+    "cavalry": { "firstWave": 5, "weight": 2, "hpMul": 1.4, "speedMul": 1, "damageMul": 1.3 },
+    "boss": { "firstWave": 5, "weight": 0, "hpMul": 14, "speedMul": 1.1, "damageMul": 2.6 }
+  },
+  "health": {
+    "max": 100,
+    "regenDelay": 3.5,
+    "regenRate": 30,
+    "hitGrace": 0.35
+  },
+  "points": {
+    "hit": 10,
+    "kill": 60,
+    "nuke": 400,
+    "boxCost": 950,
+    "boxCostGrowth": 1.2
+  },
+  "powerups": {
+    "dropChance": 0.06,
+    "lifetime": 25,
+    "pickupRadius": 1.4,
+    "instaKillSeconds": 15
+  },
+  "arena": {
+    "spawnMin": 15,
+    "spawnMax": 19,
+    "spawnAwayFromPlayer": 9,
+    "boxUseRadius": 1.9,
+    "boxRollSeconds": 2.4,
+    "startPoints": 500
+  },
+  "combat": {
+    "npcMaxHp": 50
+  },
+  "strikes": {
+    "jab": { "damage": 8, "impulse": 40, "startup": 0.08, "active": 0.1, "recovery": 0.15, "hitRadius": 0.22 },
+    "cross": { "damage": 14, "impulse": 70, "startup": 0.12, "active": 0.1, "recovery": 0.22, "hitRadius": 0.22 },
+    "hookL": { "damage": 18, "impulse": 90, "startup": 0.16, "active": 0.1, "recovery": 0.26, "hitRadius": 0.22 },
+    "hookR": { "damage": 18, "impulse": 90, "startup": 0.16, "active": 0.1, "recovery": 0.26, "hitRadius": 0.22 },
+    "lowKick": { "damage": 15, "impulse": 60, "startup": 0.18, "active": 0.12, "recovery": 0.3, "hitRadius": 0.22 },
+    "frontKick": { "damage": 20, "impulse": 110, "startup": 0.2, "active": 0.12, "recovery": 0.32, "hitRadius": 0.22 },
+    "highKick": { "damage": 30, "impulse": 140, "startup": 0.26, "active": 0.12, "recovery": 0.4, "hitRadius": 0.22 }
+  },
+  "rifle": {
+    "fireInterval": 0.1,
+    "magSize": 30,
+    "reloadSeconds": 1.9,
+    "range": 150,
+    "spreadBase": 0.004,
+    "spreadPerShot": 0.007,
+    "spreadMax": 0.06,
+    "spreadRecovery": 0.15,
+    "spreadMoving": 0.02,
+    "spreadHip": 0.025,
+    "koImpulse": 38,
+    "ragdollImpulse": 14,
+    "recoilPitch": 0.01,
+    "recoilYaw": 0.006,
+    "damage": { "head": 100, "torso": 18, "pelvis": 15, "upperLimb": 11, "lowerLimb": 8 }
+  },
+  "shotgun": {
+    "fireInterval": 0.85,
+    "pumpDelay": 0.14,
+    "pumpSeconds": 0.42,
+    "pumpTravel": 0.09,
+    "magSize": 8,
+    "shellSeconds": 0.5,
+    "pellets": 9,
+    "range": 60,
+    "spreadAim": 0.055,
+    "spreadHip": 0.085,
+    "spreadMoving": 0.012,
+    "koImpulse": 30,
+    "ragdollImpulse": 22,
+    "recoilPitch": 0.06,
+    "recoilYaw": 0.02,
+    "falloffStart": 6,
+    "falloffEnd": 26,
+    "minFalloff": 0.25,
+    "damage": { "head": 30, "torso": 9, "pelvis": 8, "upperLimb": 6, "lowerLimb": 4 }
+  },
+  "guns": {
+    "rpg": { "fireInterval": 0.9, "magSize": 1, "reloadSeconds": 2.2, "range": 200, "spreadAim": 0.004, "spreadHip": 0.03, "recoilPitch": 0.09, "recoilYaw": 0.02, "koImpulse": 0, "ragdollImpulse": 0 },
+    "freeze": { "fireInterval": 0.28, "magSize": 12, "reloadSeconds": 1.6, "range": 70, "spreadAim": 0.003, "spreadHip": 0.02, "recoilPitch": 0.006, "recoilYaw": 0.003, "koImpulse": 0, "ragdollImpulse": 10 },
+    "tesla": { "fireInterval": 0.55, "magSize": 6, "reloadSeconds": 1.8, "spreadAim": 0.002, "spreadHip": 0.015, "recoilPitch": 0.025, "recoilYaw": 0.01, "koImpulse": 0, "ragdollImpulse": 0 },
+    "antigrav": { "fireInterval": 0.45, "magSize": 8, "reloadSeconds": 1.6, "range": 80, "spreadAim": 0.003, "spreadHip": 0.02, "recoilPitch": 0.012, "recoilYaw": 0.004, "koImpulse": 0, "ragdollImpulse": 0 },
+    "llamaCannon": { "fireInterval": 0.6, "magSize": 5, "reloadSeconds": 2, "range": 200, "spreadAim": 0.01, "spreadHip": 0.04, "recoilPitch": 0.05, "recoilYaw": 0.015, "koImpulse": 0, "ragdollImpulse": 0 }
+  },
+  "special": {
+    "rocketSpeed": 32,
+    "rocketGravity": 1.2,
+    "blastRadius": 4.5,
+    "blastDamage": 140,
+    "blastSpeed": 11,
+    "llamaSpeed": 19,
+    "llamaDamage": 60,
+    "llamaImpulse": 70,
+    "llamaPropSeconds": 14,
+    "maxLlamaProps": 12,
+    "freezeSeconds": 5,
+    "shatterImpulse": 55,
+    "teslaRange": 28,
+    "teslaChainRadius": 5,
+    "teslaMaxTargets": 5,
+    "teslaDamage": 26,
+    "teslaImpulse": 14,
+    "floatSeconds": 2.6,
+    "floatGravity": -0.35
+  },
+  "reserve": {
+    "rifle": 210,
+    "shotgun": 40,
+    "rpg": 8,
+    "freeze": 48,
+    "tesla": 30,
+    "antigrav": 32,
+    "llamaCannon": 20
+  },
+  "player": {
+    "walkSpeed": 3,
+    "runSpeed": 6,
+    "turnRate": 12,
+    "aimTurnRate": 40,
+    "lockOnRange": 2.5,
+    "blockDistance": 0.5,
+    "aimWalkSpeed": 2,
+    "swapSeconds": 0.35,
+    "aimRaiseRate": 14,
+    "aimFollowRate": 25,
+    "jumpSpeed": 5.4,
+    "llamaJumpSpeed": 6.2,
+    "gravity": 15,
+    "shoulderAfterShot": 0.45
+  },
+  "npc": {
+    "speed": 2.5,
+    "holdDistance": 1,
+    "resumeDistance": 1.1,
+    "separationRadius": 0.9,
+    "separationStrength": 6,
+    "minPlayerDistance": 0.8,
+    "playerPushStrength": 16,
+    "chaseCancelPush": 0.5,
+    "ragdollMinSeconds": 4,
+    "ragdollMaxSeconds": 8,
+    "settleSpeed": 0.6,
+    "recoverSeconds": 0.8,
+    "flinchSeconds": 0.3,
+    "pushbackDistance": 0.3,
+    "shotPushbackDistance": 0.12,
+    "pushbackSeconds": 0.2
+  },
+  "body": {
+    "linearDamping": 0.5,
+    "angularDamping": 3,
+    "friction": 0.8,
+    "restitution": 0.05
+  }
+}

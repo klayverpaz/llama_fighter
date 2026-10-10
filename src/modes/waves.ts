@@ -1,14 +1,7 @@
-/** Zombies-style wave rules (pure; the game asks it what to do each tick). */
-export const WAVES = {
-  perWave: 5,
-  maxPerWave: 40,
-  /** At most this many zombies on the field at once; the rest wait their turn. */
-  maxAlive: 24,
-  spawnInterval: 0.55,
-  /** Pause between waves (and before the first). */
-  intermission: 7,
-  firstIntermission: 3,
-};
+import { TUNING } from '../tuning/tuning';
+
+/** Zombies-style wave rules (pure; the game asks it what to do each tick). Numbers: tuning.json. */
+export const WAVES = TUNING.waves;
 
 export function waveSize(wave: number): number {
   return Math.min(WAVES.maxPerWave, WAVES.perWave * Math.max(1, wave));
@@ -23,10 +16,13 @@ export interface ZombieStats {
 /** Tougher, faster, harder-hitting every wave: walkers, then joggers, then sprinters. */
 export function zombieStats(wave: number): ZombieStats {
   const w = Math.max(1, wave);
+  const z = TUNING.zombies;
   return {
-    hp: Math.round(50 + 12 * (w - 1)),
-    speed: w <= 2 ? 1.5 : w <= 5 ? 2.4 : Math.min(4.2, 3.2 + 0.15 * (w - 6)),
-    damage: Math.min(45, 20 + 3 * (w - 1)),
+    hp: Math.round(z.baseHp + z.hpPerWave * (w - 1)),
+    speed: w <= z.earlyUntilWave ? z.speedEarly
+      : w <= z.midUntilWave ? z.speedMid
+      : Math.min(z.speedMax, z.speedLate + z.speedPerLateWave * (w - z.midUntilWave - 1)),
+    damage: Math.min(z.damageMax, z.damageBase + z.damagePerWave * (w - 1)),
   };
 }
 
@@ -92,13 +88,7 @@ export class WaveDirector {
 }
 
 /** Player health with Call-of-Duty style regeneration. */
-export const HEALTH = {
-  max: 100,
-  regenDelay: 3.5,
-  regenRate: 30,
-  /** Brief invulnerability after a hit so a crowd can't shred you in one frame. */
-  hitGrace: 0.35,
-};
+export const HEALTH = TUNING.health;
 
 export class PlayerHealth {
   hp = HEALTH.max;
@@ -125,22 +115,17 @@ export class PlayerHealth {
 }
 
 /** Points, like the zombies mode: some for every hit, more for a kill. */
-export const POINTS = {
-  hit: 10,
-  kill: 60,
-  nuke: 400,
-  boxCost: 950,
-};
+export const POINTS = TUNING.points;
+
+/** Mystery Box price for a wave: boxCost in wave 1, ×boxCostGrowth each wave after, rounded to $10. */
+export function boxCost(wave: number): number {
+  const raw = POINTS.boxCost * POINTS.boxCostGrowth ** Math.max(0, wave - 1);
+  return Math.round(raw / 10) * 10;
+}
 
 export type PowerUpKind = 'maxAmmo' | 'instaKill' | 'nuke';
 
-export const POWERUPS = {
-  dropChance: 0.06,
-  /** Seconds a dropped power-up waits on the ground before vanishing. */
-  lifetime: 25,
-  pickupRadius: 1.4,
-  instaKillSeconds: 15,
-};
+export const POWERUPS = TUNING.powerups;
 
 /** Maybe drop a power-up for a kill (rng() in [0, 1)). */
 export function rollPowerUp(rng: () => number): PowerUpKind | null {

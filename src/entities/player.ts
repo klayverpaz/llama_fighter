@@ -19,6 +19,7 @@ import { GUN_POINTS, HOLSTER_SIDE } from '../weapons/gunPoints';
 import { pumpStroke, SHOTGUN } from '../weapons/shotgun';
 import type { SegmentTransform } from '../figure/fk';
 import { muzzleOf, reloadWeight, solveGunRig, type RigOutput } from './rifleRig';
+import { TUNING } from '../tuning/tuning';
 
 export type Weapon = 'fists' | GunName;
 
@@ -44,29 +45,7 @@ export interface RifleEvents {
   shellLoaded: boolean;
 }
 
-export const PLAYER_TUNING = {
-  walkSpeed: 3,
-  runSpeed: 6,
-  turnRate: 12,
-  /** Exponential turn rate toward the auto-aim heading while a strike plays (180° ≈ done in 0.08 s). */
-  aimTurnRate: 40,
-  lockOnRange: 2.5,
-  blockDistance: 0.5,
-  /** Walking speed while aiming down the sights (no running). */
-  aimWalkSpeed: 2,
-  /** Seconds to take the rifle off the back or put it away. */
-  swapSeconds: 0.35,
-  /** How fast the rifle comes up to the shoulder / drops to low ready. */
-  aimRaiseRate: 14,
-  /** Body follows the camera this fast while aiming. */
-  aimFollowRate: 25,
-  /** Jump: take-off speed (m/s) on foot and on the llama, and gravity (snappier than real). */
-  jumpSpeed: 5.4,
-  llamaJumpSpeed: 6.2,
-  gravity: 15,
-  /** The rifle stays shouldered this long after the last shot. */
-  shoulderAfterShot: 0.45,
-};
+export const PLAYER_TUNING = TUNING.player;
 
 export interface PlayerInput {
   /** World-space unit direction or zero (already camera-relative). */

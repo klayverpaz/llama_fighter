@@ -1,20 +1,15 @@
+import { TUNING, type Tuning } from '../tuning/tuning';
 import { zombieStats, type ZombieStats } from './waves';
 
 export type ZombieKind = 'walker' | 'runner' | 'brute' | 'cavalry' | 'boss';
 
-export interface ZombieKindSpec {
+/** Look of a zombie kind; its balance numbers (firstWave, weight, hp/speed/damage multipliers) live in tuning.json. */
+interface ZombieKindLook {
   /** HUD / banner name (plural for "NOVO: …"). */
   name: string;
   plural: string;
-  /** First wave where this kind can show up. */
-  firstWave: number;
-  /** Relative spawn weight once unlocked (the boss is placed by hand). */
-  weight: number;
   skin: number;
   eyes: number;
-  hpMul: number;
-  speedMul: number;
-  damageMul: number;
   /** Visual thickness of limbs/torso (1 = normal) and head size. */
   bulk: number;
   head: number;
@@ -22,23 +17,28 @@ export interface ZombieKindSpec {
   scale?: number;
 }
 
+export type ZombieKindSpec = ZombieKindLook & Tuning['zombieKinds'][ZombieKind];
+
+/** The tuning object itself, with the look attached, so edits to TUNING apply live. */
+const kind = (k: ZombieKind, look: ZombieKindLook): ZombieKindSpec => Object.assign(TUNING.zombieKinds[k], look);
+
 export const ZOMBIE_KINDS: Record<ZombieKind, ZombieKindSpec> = {
-  walker: { name: 'Andarilho', plural: 'ANDARILHOS', firstWave: 1, weight: 10, skin: 0x6f9a4a, eyes: 0xfff35a, hpMul: 1, speedMul: 1, damageMul: 1, bulk: 1, head: 1 },
-  runner: { name: 'Corredor', plural: 'CORREDORES', firstWave: 2, weight: 5, skin: 0xb9c99a, eyes: 0xff3b2f, hpMul: 0.6, speedMul: 1.65, damageMul: 0.8, bulk: 0.85, head: 0.95 },
-  brute: { name: 'Brutamontes', plural: 'BRUTAMONTES', firstWave: 4, weight: 2, skin: 0x6b4b8e, eyes: 0x7dfcff, hpMul: 3.2, speedMul: 0.75, damageMul: 1.8, bulk: 1.9, head: 1.2 },
-  cavalry: { name: 'Cavaleiro Zumbi', plural: 'CAVALEIROS ZUMBIS', firstWave: 5, weight: 2, skin: 0x8a9a6a, eyes: 0xff3b2f, hpMul: 1.4, speedMul: 1, damageMul: 1.3, bulk: 1, head: 1 },
-  boss: { name: 'Rei Brutamontes', plural: 'O REI', firstWave: 5, weight: 0, skin: 0xc9a227, eyes: 0xff2020, hpMul: 14, speedMul: 1.1, damageMul: 2.6, bulk: 1.7, head: 1.2, scale: 4 },
+  walker: kind('walker', { name: 'Andarilho', plural: 'ANDARILHOS', skin: 0x6f9a4a, eyes: 0xfff35a, bulk: 1, head: 1 }),
+  runner: kind('runner', { name: 'Corredor', plural: 'CORREDORES', skin: 0xb9c99a, eyes: 0xff3b2f, bulk: 0.85, head: 0.95 }),
+  brute: kind('brute', { name: 'Brutamontes', plural: 'BRUTAMONTES', skin: 0x6b4b8e, eyes: 0x7dfcff, bulk: 1.9, head: 1.2 }),
+  cavalry: kind('cavalry', { name: 'Cavaleiro Zumbi', plural: 'CAVALEIROS ZUMBIS', skin: 0x8a9a6a, eyes: 0xff3b2f, bulk: 1, head: 1 }),
+  boss: kind('boss', { name: 'Rei Brutamontes', plural: 'O REI', skin: 0xc9a227, eyes: 0xff2020, bulk: 1.7, head: 1.2, scale: 4 }),
 };
 
-export const CAVALRY_SPEED = 5.2;
-/** No single hit takes more than this (HP is 100): even the boss needs two. */
-export const MAX_HIT = 60;
+/** Per-wave zombie scaling, cavalry speed, maxHit (no single hit on the player takes more) and boss cadence. */
+export const ZOMBIES = TUNING.zombies;
 
-export const isBossWave = (wave: number) => wave > 0 && wave % 5 === 0;
+export const isBossWave = (wave: number) => wave > 0 && wave % Math.max(1, Math.round(ZOMBIES.bossEvery)) === 0;
 
 /** Pick the kind of the next spawn: weighted among the kinds unlocked by this wave. */
 export function pickZombieKind(wave: number, rng: () => number): ZombieKind {
   const pool = (Object.keys(ZOMBIE_KINDS) as ZombieKind[]).filter((k) => ZOMBIE_KINDS[k].weight > 0 && ZOMBIE_KINDS[k].firstWave <= wave);
+  if (pool.length === 0) return 'walker';
   // Newer kinds get more common as the waves go on.
   const weight = (k: ZombieKind) => ZOMBIE_KINDS[k].weight * (1 + 0.15 * (wave - ZOMBIE_KINDS[k].firstWave));
   const total = pool.reduce((sum, k) => sum + weight(k), 0);
@@ -60,8 +60,8 @@ export function kindStats(kind: ZombieKind, wave: number): ZombieStats & { scale
   const k = ZOMBIE_KINDS[kind];
   return {
     hp: Math.round(base.hp * k.hpMul),
-    speed: kind === 'cavalry' ? CAVALRY_SPEED : Math.min(6, base.speed * k.speedMul),
-    damage: Math.min(MAX_HIT, Math.round(base.damage * k.damageMul)),
+    speed: kind === 'cavalry' ? ZOMBIES.cavalrySpeed : Math.min(ZOMBIES.kindSpeedMax, base.speed * k.speedMul),
+    damage: Math.min(ZOMBIES.maxHit, Math.round(base.damage * k.damageMul)),
     ...(k.scale ? { scale: k.scale } : {}),
   };
 }

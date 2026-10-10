@@ -1,4 +1,5 @@
 import type { Limb } from '../figure/skeleton';
+import { TUNING } from '../tuning/tuning';
 
 export type StrikeName = 'jab' | 'cross' | 'hookL' | 'hookR' | 'lowKick' | 'frontKick' | 'highKick';
 
@@ -19,16 +20,21 @@ export interface StrikeDef {
   hitRadius: number;
 }
 
-export const NPC_MAX_HP = 50;
+/** Training-dummy HP (npcMaxHp). */
+export const COMBAT = TUNING.combat;
+
+/** Timing, damage and impulse come from tuning.json; key, limb and direction are fixed here. */
+const strike = (name: StrikeName, key: string, limb: Limb, direction: [number, number, number]): StrikeDef =>
+  Object.assign(TUNING.strikes[name], { name, key, limb, direction });
 
 export const STRIKES: Record<StrikeName, StrikeDef> = {
-  jab:       { name: 'jab',       key: 'KeyJ',  limb: 'handL', damage: 8,  impulse: 40,  startup: 0.08, active: 0.10, recovery: 0.15, direction: [0, 0.1, 1],      hitRadius: 0.22 },
-  cross:     { name: 'cross',     key: 'KeyK',  limb: 'handR', damage: 14, impulse: 70,  startup: 0.12, active: 0.10, recovery: 0.22, direction: [0, 0.15, 1],     hitRadius: 0.22 },
-  hookL:     { name: 'hookL',     key: 'KeyU',  limb: 'handL', damage: 18, impulse: 90,  startup: 0.16, active: 0.10, recovery: 0.26, direction: [-0.5, 0.35, 1],  hitRadius: 0.22 },
-  hookR:     { name: 'hookR',     key: 'KeyI',  limb: 'handR', damage: 18, impulse: 90,  startup: 0.16, active: 0.10, recovery: 0.26, direction: [0.5, 0.35, 1],   hitRadius: 0.22 },
-  lowKick:   { name: 'lowKick',   key: 'KeyN',  limb: 'footR', damage: 15, impulse: 60,  startup: 0.18, active: 0.12, recovery: 0.30, direction: [0.3, -0.2, 1],   hitRadius: 0.22 },
-  frontKick: { name: 'frontKick', key: 'KeyM',  limb: 'footR', damage: 20, impulse: 110, startup: 0.20, active: 0.12, recovery: 0.32, direction: [0, 0.2, 1],      hitRadius: 0.22 },
-  highKick:  { name: 'highKick',  key: 'Comma', limb: 'footR', damage: 30, impulse: 140, startup: 0.26, active: 0.12, recovery: 0.40, direction: [0.4, 0.5, 1],    hitRadius: 0.22 },
+  jab: strike('jab', 'KeyJ', 'handL', [0, 0.1, 1]),
+  cross: strike('cross', 'KeyK', 'handR', [0, 0.15, 1]),
+  hookL: strike('hookL', 'KeyU', 'handL', [-0.5, 0.35, 1]),
+  hookR: strike('hookR', 'KeyI', 'handR', [0.5, 0.35, 1]),
+  lowKick: strike('lowKick', 'KeyN', 'footR', [0.3, -0.2, 1]),
+  frontKick: strike('frontKick', 'KeyM', 'footR', [0, 0.2, 1]),
+  highKick: strike('highKick', 'Comma', 'footR', [0.4, 0.5, 1]),
 };
 
 export const STRIKE_NAMES = Object.keys(STRIKES) as StrikeName[];
